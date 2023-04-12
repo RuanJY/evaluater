@@ -345,7 +345,8 @@ void pclCallback(const sensor_msgs::PointCloud2::ConstPtr & pcl_msg)
 }
 
 int main(int argc, char **argv){
-    // 0 compare online path with online grt (online estimate extrinsic)
+    // grt: ground truth
+    // 0 compare online path with grt (online estimate extrinsic), grt can be read from txt file or ros topic
     // 1 receive path and store in txt
     // 2 accumulate registered raw pcl (for map comparison)
 
@@ -389,7 +390,7 @@ int main(int argc, char **argv){
                 if(first){
                     first = false;
                     if(g_data.grt_msg_vector.size() < 2){
-                        std::cout<<"waitting for grt"<<std::endl;
+                        std::cout<<"waiting for grt"<<std::endl;
                     }
                 }
                 r.sleep();

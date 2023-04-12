@@ -1,10 +1,9 @@
     <launch>
         <node pkg="evaluater" type="evaluater" name="evaluater" output="screen">
-
+                <param name="mode" value="0"/>
                 <param name="file_loc" value="/home/ruanjy/Workspace/wyb_ws/liosam_result/evaluater_log/"/>
                 <param name="file_loc_grt_path" value="/home/ruanjy/Workspace/wyb_ws/liosam_result/evaluater_log/grt_path/hkfron_gps_path_grt.txt"/>
                 <param name="read_grt_online" value="true"/>
-                <param name="mode" value="0"/>
                 <remap from="/pose" to="/mavros/local_position/odom"/>
                 <remap from="/slam_odom" to="/lio_sam/mapping/odometry"/>
                 <remap from="/velodyne_points" to="/turned_velodyned"/>
