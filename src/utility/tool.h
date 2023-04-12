@@ -39,6 +39,7 @@ State trans32state(Transf & _trans);
 sensor_msgs::PointCloud matrix2D2pclMsg(Eigen::MatrixXd _mx, int _npoint);
 sensor_msgs::PointCloud matrix3D2pclMsg(Eigen::MatrixXd _mx, int _npoint);
 Eigen::Matrix<double, 1, 6> txt2matrixSeattleOdom(int _line, std::ifstream &file_odom);
+bool txt2PoseMsg(std::ifstream &file_odom, geometry_msgs::PoseStamped & pose_msg);
 pcl::PointCloud<pcl::PointXYZ> matrix3D2pcl(const PointMatrix & _pmatrix);
 void eigen2pcl();
 geometry_msgs::PoseWithCovariance transf2PoseWithCovariance(Transf trans);

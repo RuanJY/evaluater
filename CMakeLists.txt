@@ -4,7 +4,6 @@ project(evaluater)
 add_compile_options(-std=c++14)
 set(catkin_DIR /opt/ros/kinetic/share/catkin/cmake)
 set(CMAKE_BUILD_TYPE "Release")
-#set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
 
 #ros
 find_package(catkin REQUIRED COMPONENTS
@@ -13,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
         rospy
         sensor_msgs
         std_msgs
+        cloud_msgs
         )
 catkin_package()
 include_directories(include ${catkin_INCLUDE_DIRS})

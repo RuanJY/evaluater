@@ -156,6 +156,51 @@ Eigen::Matrix<double, 1, 6> txt2matrixSeattleOdom(int _line, std::ifstream &file
     //std::cout<<"txt2matrixSeattleOdom result: "<<_line<<"  "<<_odom<<std::endl;
     return _odom;
 }
+bool txt2PoseMsg(std::ifstream &file_odom, geometry_msgs::PoseStamped & pose_msg){
+    //read tum format trajectory, return a pose msg
+    if(file_odom.eof()){
+        std::cout << "end of file"<<std::endl;
+        return false;
+    }
+    Eigen::Matrix<double, 1, 8> one_line_pose;
+    one_line_pose.setZero();
+    char read_buffer[30];
+    double double_buff;
+    //read one line
+    int i;
+    for(i=0; i<7; i++){
+        if(file_odom.eof()){
+            std::cout << "unexpected end of file"<<std::endl;
+            return false;
+        }
+        file_odom.getline(read_buffer, 30, ' '); //
+        //one_line_pose(i) = std::stod(read_buffer);
+        sscanf(read_buffer, "%lf, ",  &double_buff);//%d mean int, %lf mean double, %f mean float
+        one_line_pose(i) = double_buff;
+        //std::cout << "buff: " << read_buffer <<  " double: "<<  one_line_pose(i) << std::endl;
+
+    }
+    if(file_odom.eof()){
+        std::cout << "unexpected end of file"<<std::endl;
+        return false;
+    }
+    file_odom.getline(read_buffer, 30, '\n'); //
+    one_line_pose(i) = std::stod(read_buffer);
+    sscanf(read_buffer, "%lf, ", &double_buff );
+    one_line_pose(i) = double_buff;
+    //std::cout << "buff: " << read_buffer <<  " double: "<<  one_line_pose(i) << std::endl;
+    //convert to pose msg
+    pose_msg.header.stamp.fromSec(one_line_pose(0));
+    pose_msg.header.frame_id = "velodyne";
+    pose_msg.pose.position.x = one_line_pose(1);
+    pose_msg.pose.position.y = one_line_pose(2);
+    pose_msg.pose.position.z = one_line_pose(3);
+    pose_msg.pose.orientation.x = one_line_pose(4);
+    pose_msg.pose.orientation.y = one_line_pose(5);
+    pose_msg.pose.orientation.z = one_line_pose(6);
+    pose_msg.pose.orientation.w = one_line_pose(7);
+    return  true;
+}
 pcl::PointCloud<pcl::PointXYZ> matrix3D2pcl(const PointMatrix & _pmatrix){
 
     pcl::PointCloud<pcl::PointXYZ> pcl_result;
