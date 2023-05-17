@@ -12,7 +12,7 @@ My evaluator for online testing the accuracy of odometry compared with the groun
 - `remap from="/velodyne_points" to="/turned_velodyned"` this is the registered point cloud to accumulate.
 
 
-##mode 
+## mode 
 
 ### 0: compare online path with ground truth, estimate extrinsic online, ground truth can be read from txt file or ros topic
 
