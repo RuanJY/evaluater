@@ -52,10 +52,10 @@ double rotationError(){
         //pose->Transf
         trans_bef_cal = PoseStamp2transf(path_pose);
         //std::cout<<"trans_bef_cal\n"<<trans_bef_cal<<std::endl;
-        //std::cout<<"g_data.T_body_lidar\n"<<g_data.T_body_lidar<<std::endl;
+        //std::cout<<"g_data.T_grt_lidar\n"<<g_data.T_grt_lidar<<std::endl;
         //calibrated
-        //trans_aft_cal = g_data.T_body_lidar * trans_bef_cal;
-        trans_aft_cal = trans_bef_cal * g_data.T_body_lidar;
+        //trans_aft_cal = g_data.T_grt_lidar * trans_bef_cal;
+        trans_aft_cal = trans_bef_cal * g_data.T_grt_lidar;
 
         //std::cout<<"trans_aft_cal\n"<<trans_aft_cal<<std::endl;
         //eror
@@ -160,7 +160,8 @@ void Data_store::logInit(const std::string & file_loc){
 void   Data_store::saveResult()
 {
     std::cout<<std::setprecision(10)<<setiosflags(std::ios::fixed);
-    Transf trans_error = (T_grt_body0 * T_body_lidar * T_lidar0_lidar1).inverse() * T_grt_body1 *  T_body_lidar;
+    //kitti like RTE compute
+    Transf trans_error = (T_world_grt0 * T_grt_lidar * T_lidar0_lidar1).inverse() * T_world_grt1 * T_grt_lidar;//right?
     double translation_error = std::abs(trans_error(0,3)) + std::abs(trans_error(1,3)) + std::abs(trans_error(2,3));
     State state_error = trans32quat2state(trans_error);
     double rotation_error = std::abs(state_error(3,0)) + std::abs(state_error(4,0)) + std::abs(state_error(5,0));
@@ -177,16 +178,17 @@ void   Data_store::saveResult()
     //save report
     if(file_loc_report_wrt){
         file_loc_report_wrt << "step: " << step << "\n"
-                  //<<"avg_error "<<final_avg_error<<std::endl
-                  << "trans_error: \n" << trans_error << std::endl
-                  << "tra_error: " << translation_error << std::endl
-                  << "rel_tra_error: " << translation_error/trj_length << std::endl
-                  << "rotation_error: " << rotation_error << std::endl
-                  << "TRJ LENGTH: " << trj_length << std::endl
-                  << "T_body_lidar: \n"    << T_body_lidar << std::endl
-                  << "T_grt_body0: \n"     << T_grt_body0 << std::endl
+                  <<"avg_translation_error "<<final_avg_error<<std::endl
+                  //<< "trans_error: \n" << trans_error << std::endl
+                            //<< "translation_error: " << translation_error << std::endl
+                            //<< "rel_translation_error: " << 100 * translation_error/trj_length << "%"<<std::endl
+                            //<< "rotation_error: " << rotation_error << std::endl
+                            << "TRJ LENGTH: " << trj_length << std::endl
+                            << "T_grt_lidar: \n" << T_grt_lidar << std::endl
+                  //<< "T_world_grt0: \n"     << T_world_grt0 << std::endl
                   << "T_lidar0_lidar1: \n" << T_lidar0_lidar1 << std::endl
-                  << "T_grt_body1: \n"     << T_grt_body1 << std::endl;
+                  //<< "T_world_grt1: \n"     << T_world_grt1
+                  << std::endl;
         std::cout << "Result saved in: " << param.file_loc_report << std::endl;
         file_loc_report_wrt.close();
     }
@@ -221,7 +223,8 @@ void   Data_store::imuUpdatePose(Transf & now_slam_trans){
 void Param::init(ros::NodeHandle& nh){
     nh.param("evaluater/file_loc", file_loc, std::string("~"));
     nh.param("evaluater/file_loc_grt_path", file_loc_grt_path, std::string("~"));
-    nh.param("evaluater/read_grt_online", read_grt_online, false);
+    nh.param("evaluater/read_grt_txt", read_grt_txt, false);
+    nh.param("evaluater/timestamp_valid_thr", timestamp_valid_thr, 0.15);
 }
 bool saveOnePoseAndPath(geometry_msgs::PoseStamped & pose_msg, PointMatrix & pose, nav_msgs::Path & path){
     Point tmp_point;
@@ -232,7 +235,7 @@ bool saveOnePoseAndPath(geometry_msgs::PoseStamped & pose_msg, PointMatrix & pos
     path.poses.push_back(pose_msg);
 }
 bool computeOnlineError(){
-    double time_tf_slam, time_grt, final_avg_error;
+    double time_tf_slam, time_grt;
     if(g_data.grt_msg_vector.size() < 2){
         return false;
     }
@@ -248,9 +251,16 @@ bool computeOnlineError(){
         time_grt = g_data.grt_msg_vector[g_data.grt_pointer].header.stamp.toSec();
         //std::cout<<time_grt<<' ';
     }
+    if(g_data.grt_pointer+1 < g_data.grt_msg_vector.size()){
+        double a_step_forward_time_grt = g_data.grt_msg_vector[g_data.grt_pointer+1].header.stamp.toSec();
+        if(abs(a_step_forward_time_grt - time_tf_slam) < abs(time_grt - time_tf_slam)){
+            g_data.grt_pointer ++;
+            time_grt = a_step_forward_time_grt;
+        }
+    }
     //std::cout<<std::endl<<"final time_grt:"<<time_grt<<' ';
-    if(std::abs(time_tf_slam - time_grt) > 0.1){
-        std::cout<<"too far"<<std::endl;
+    if(std::abs(time_tf_slam - time_grt) > param.timestamp_valid_thr){
+        std::cout<<"timestamp too far: "<<std::abs(time_tf_slam - time_grt) <<std::endl;
         //only save path
         nav_msgs::Odometry & tf_slam_msg = g_data.tf_slam_buff;
         geometry_msgs::PoseStamped pose_stamped_msg;
@@ -259,7 +269,7 @@ bool computeOnlineError(){
         g_data.path_full.poses.push_back(pose_stamped_msg);
         return false;
     }
-    //check grt jump
+    //check grt jump (gps height may jump in urban area)
     geometry_msgs::PoseStamped & grt_tf_msg = g_data.grt_msg_vector[g_data.grt_pointer];
     geometry_msgs::PoseStamped & last_tf_msg = g_data.grt_msg_vector[g_data.grt_pointer - 1];
     /*if(grt_tf_msg.pose.position.z - last_tf_msg.pose.position.z > 10 ||
@@ -269,10 +279,11 @@ bool computeOnlineError(){
     }*/ //not used in
     //valid
     if(g_data.step == 0){
-        g_data.T_grt_body0 = PoseStamp2transf(grt_tf_msg);
+        g_data.T_world_grt0 = PoseStamp2transf(grt_tf_msg);
+        g_data.T_lidar0 = Odometry2transf(g_data.tf_slam_buff);
     }
-    g_data.T_grt_body1 = PoseStamp2transf(grt_tf_msg);
-    g_data.T_lidar0_lidar1 = Odometry2transf(g_data.tf_slam_buff);
+    g_data.T_world_grt1 = PoseStamp2transf(grt_tf_msg);
+    g_data.T_lidar0_lidar1 = g_data.T_lidar0.inverse() * Odometry2transf(g_data.tf_slam_buff);
     g_data.step++;
     std::cout<<"valid count:"<<g_data.step<<std::endl;
 
@@ -285,22 +296,22 @@ bool computeOnlineError(){
     saveOnePoseAndPath(pose_stamped_msg, g_data.pose, g_data.path);
     g_data.path_full.poses.push_back(pose_stamped_msg);
     //calculate path legth
-    if(g_data.step > 1) g_data.trj_length += sqrt(
+    if(g_data.step > 1){g_data.trj_length += sqrt(
                 pow(pose_stamped_msg.pose.position.x - g_data.pose.point(0,g_data.pose.num_point-2), 2) +
                 pow(pose_stamped_msg.pose.position.y - g_data.pose.point(1,g_data.pose.num_point-2), 2) +
-                pow(pose_stamped_msg.pose.position.z - g_data.pose.point(2,g_data.pose.num_point-2), 2));
+                pow(pose_stamped_msg.pose.position.z - g_data.pose.point(2,g_data.pose.num_point-2), 2));}
 
     //find the transform between slam path and grt path, or named calibrate
     //if(g_data.trj_length < 2000 * 0.3){
-    g_data.T_body_lidar = computeExtrinsic( g_data.pose, g_data.pose_grt);
+    g_data.T_grt_lidar = computeExtrinsic(g_data.pose, g_data.pose_grt);
     //}
     PointMatrix tmp_pose = g_data.pose;
     double past_50error;
     //std::cout<<"bef_error "<<computeError(tmp_pose, g_data.pose_grt, past_50error)<<std::endl;
-    g_data.T_body_lidar = g_data.T_body_lidar.inverse();
-    tmp_pose.trans(g_data.T_body_lidar);
-    final_avg_error = computeError(tmp_pose, g_data.pose_grt, past_50error);
-    std::cout<<"avg_error "<<final_avg_error<<std::endl;
+    g_data.T_grt_lidar = g_data.T_grt_lidar.inverse();
+    tmp_pose.trans(g_data.T_grt_lidar);
+    g_data.final_avg_error = computeError(tmp_pose, g_data.pose_grt, past_50error);
+    std::cout<<"avg_error "<<g_data.final_avg_error<<std::endl;
     std::cout<<"past50_error "<<past_50error<<std::endl;
 
     //rotation error
@@ -369,7 +380,7 @@ int main(int argc, char **argv){
         if(g_data.mode  == 0){
             ros::Subscriber trans_slam_sub       = nh.subscribe("/slam_odom", 500, transSlamCallback);//from slam
             ros::Subscriber grt_uav_sub, grt_sub;
-            if(!param.read_grt_online){
+            if(!param.read_grt_txt){
                 //grt_sub     = nh.subscribe("/pose", 500, groundTruthCallback);//vicon
                 grt_uav_sub = nh.subscribe("/pose", 500, groundTruthUavCallback);//gps+imu
             }else{
@@ -436,7 +447,7 @@ int main(int argc, char **argv){
         else if(g_data.mode  ==4) {
         }
     }
-    //std::cout<<"T_body_lidar\n"<<g_data.T_body_lidar<<std::endl;
+    //std::cout<<"T_grt_lidar\n"<<g_data.T_grt_lidar<<std::endl;
 
     std::cout<<"done"<<std::endl;
     return 0;

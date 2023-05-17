@@ -60,19 +60,19 @@ public:
     int grt_pointer = 0;
     std::queue<sensor_msgs::PointCloud2> registered_pcl_queue;
 
-    Transf T_grt_body0, T_grt_body1, T_lidar0_lidar1, T_body_lidar;
+    Transf T_world_grt0, T_world_grt1, T_lidar0_lidar1, T_grt_lidar, T_lidar0; //1 means final time, 0 means begin time
     nav_msgs::Path path;
     nav_msgs::Path path_cal;//calibrated
     nav_msgs::Path path_full;
     PointMatrix    pose;
     nav_msgs::Path path_grt;
     PointMatrix    pose_grt;
-    Transf T_grt_lidar;
+
     ///record
     std::ofstream file_loc_report_wrt, file_loc_path_wrt, file_loc_path_cal_wrt, file_loc_path_grt_wrt, file_loc_path_full_wrt;
     std::string  file_loc_rawPcl;
     double trj_length = 0;
-
+    double final_avg_error = 0;
     nav_msgs::Path path_odom;
 
     pcl::PointCloud<pcl::PointXYZ> pcl_raw_all;
@@ -209,7 +209,8 @@ class Param{
 public:
     int mode;//1 grt 2 mse 3
     std::string file_loc, file_loc_report, file_loc_final_map, file_loc_rawpcl, file_loc_grt_path;
-    bool read_grt_online;
+    bool read_grt_txt;
+    double timestamp_valid_thr = 0.1;
     void init(ros::NodeHandle& nh);
 };
 //}
