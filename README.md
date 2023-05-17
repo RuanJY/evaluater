@@ -13,6 +13,7 @@ My evaluator for online testing the accuracy of odometry compared with the groun
 
 
 ##mode 
+
 ### 0: compare online path with ground truth, estimate extrinsic online, ground truth can be read from txt file or ros topic
 
 set "/slam_odom" topic
