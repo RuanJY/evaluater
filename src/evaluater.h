@@ -41,8 +41,6 @@
 #include <pcl/io/ply_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/registration/icp.h>
-//ceres
-#include<ceres/ceres.h>
 //ours
 #include "utility/common.h"
 #include "utility/tool.h"

@@ -362,9 +362,6 @@ int main(int argc, char **argv){
     // 2 accumulate registered raw pcl (for map comparison)
 
     //ros initialize
-    google::InitGoogleLogging(argv[0]);
-    google::ParseCommandLineFlags(&argc, &argv, true);
-    //std::cout<<std::setprecision(5)<<setiosflags(std::ios::fixed);
     ros::init(argc, argv, "evaluater");
     ros::NodeHandle nh;
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);//Debug Info

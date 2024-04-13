@@ -12,7 +12,6 @@ find_package(catkin REQUIRED COMPONENTS
         rospy
         sensor_msgs
         std_msgs
-        cloud_msgs
         )
 catkin_package()
 include_directories(include ${catkin_INCLUDE_DIRS})
@@ -20,15 +19,12 @@ include_directories(include ${catkin_INCLUDE_DIRS})
 find_package(PCL REQUIRED)
 include_directories(include ${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
-#ceres
-find_package(Ceres REQUIRED)
-include_directories(${CERES_INCLUDE_DIRS})
 
 add_executable(evaluater
         src/evaluater.cpp
         src/utility/tool.cpp
         )
-target_link_libraries(evaluater ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${CERES_LIBRARIES})
+target_link_libraries(evaluater ${catkin_LIBRARIES} ${PCL_LIBRARIES} )
 
 
 
