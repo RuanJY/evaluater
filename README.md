@@ -68,7 +68,7 @@ kitti format, the file will be like:
 0.9998635927 0.0003255862971 0.01651332668 0 -8.131516294e-20 0.9998056849 -0.01971274699 0 -0.01651653609 0.01971005803 0.9996693041 0
 ```
 
-###1: receive pose msg (slam or ground truth) and store it to txt file (kitti or tum format)
+### 1: receive pose msg (slam or ground truth) and store it to txt file (kitti or tum format)
 
 set "/pose" topic
 

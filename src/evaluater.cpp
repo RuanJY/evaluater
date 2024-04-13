@@ -420,6 +420,7 @@ int main(int argc, char **argv){
             while(nh.ok()){
                 ros::spinOnce();
                 r.sleep();
+                std::cout << "size of pose: " << g_data.grt_msg_vector.size() << std::endl;
             }
             g_data.savePath2TxtTum(g_data.file_loc_path_grt_wrt, g_data.grt_msg_vector);
         }
