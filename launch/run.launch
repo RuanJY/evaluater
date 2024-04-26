@@ -1,21 +1,24 @@
     <launch>
         <node pkg="evaluater" type="evaluater" name="evaluater" output="screen">
-                <param name="mode" value="1"/>
+                <param name="mode" value="2"/>
                 <param name="file_loc" value="/home/ruanjy/Workspace/M1_ws/liosam_result/evaluater_log/seq1"/>
                 <param name="file_loc_grt_path" value="/home/ruanjy/Workspace/M1_ws/liosam_result/evaluater_log/grt_path/hkfront_ouster_10hz_path_grt.txt"/>
                 <param name="read_grt_txt" value="true"/>
                 <param name="timestamp_valid_thr" value="0.1"/>
                 <remap from="/pose" to="/lidar_odometry"/>
                 <remap from="/slam_odom" to="/lio_sam/mapping/odometry"/>
-                <remap from="/velodyne_points" to="/turned_velodyned"/>
+                <remap from="/velodyne_points" to="/lio_sam/mapping/cloud_registered"/>
 <!--
-pose topic:
+used pose topic:
 /lio_sam/mapping/odometry mems-lio lio-sam
 /odom floam
 /Odometry fastlio
 /lidar_odometr slamesh
-"/mavros/local_position/odom"/>
-                /vrpn_client_node/RigidBody005/pose
+/mavros/local_position/odom px4
+/vrpn_client_node/RigidBody005/pose ground truth
+point cloud topic:
+/lio_sam/mapping/cloud_registered
+/turned_velodyned
 -->
         </node>
     </launch>

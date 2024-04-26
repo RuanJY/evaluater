@@ -128,7 +128,7 @@ void Data_store::logInit(const std::string & file_loc){
     //path
     //size_t length = file_loc.size() - 4;
     //std::string tmp_file_loc = file_loc.substr(0, length);
-    std::cout<<"tend to save report in: "<<file_loc<<std::endl;
+    std::cout << "tend to save report in: " << file_loc << std::endl;
     std::string file_loc_report    = file_loc + "_report.txt";
     std::string file_loc_path      = file_loc + "_path.txt";
     std::string file_loc_path_cal  = file_loc + "_path_cal.txt";
@@ -159,6 +159,7 @@ void Data_store::logInit(const std::string & file_loc){
 }
 void   Data_store::saveResult()
 {
+    std::cout << "Saving result..." << std::endl;
     std::cout<<std::setprecision(10)<<setiosflags(std::ios::fixed);
     //kitti like RTE compute
     Transf trans_error = (T_world_grt0 * T_grt_lidar * T_lidar0_lidar1).inverse() * T_world_grt1 * T_grt_lidar;//right?
@@ -180,20 +181,20 @@ void   Data_store::saveResult()
         file_loc_report_wrt << "step: " << step << "\n"
                   <<"avg_translation_error "<<final_avg_error<<std::endl
                   //<< "trans_error: \n" << trans_error << std::endl
-                            //<< "translation_error: " << translation_error << std::endl
-                            //<< "rel_translation_error: " << 100 * translation_error/trj_length << "%"<<std::endl
-                            //<< "rotation_error: " << rotation_error << std::endl
-                            << "TRJ LENGTH: " << trj_length << std::endl
-                            << "T_grt_lidar: \n" << T_grt_lidar << std::endl
+                  //<< "translation_error: " << translation_error << std::endl
+                  //<< "rel_translation_error: " << 100 * translation_error/trj_length << "%"<<std::endl
+                  //<< "rotation_error: " << rotation_error << std::endl
+                  << "TRJ LENGTH: " << trj_length << std::endl
+                  << "T_grt_lidar: \n" << T_grt_lidar << std::endl
                   //<< "T_world_grt0: \n"     << T_world_grt0 << std::endl
                   << "T_lidar0_lidar1: \n" << T_lidar0_lidar1 << std::endl
                   //<< "T_world_grt1: \n"     << T_world_grt1
                   << std::endl;
-        std::cout << "Result saved in: " << param.file_loc_report << std::endl;
+        std::cout << "Result saved in: " << param.file_loc << std::endl;
         file_loc_report_wrt.close();
     }
     else{
-        std::cout << param.file_loc_report <<" Result not saved" << std::endl;
+        std::cout << param.file_loc <<" Result not saved" << std::endl;
     }
     //save path
     savePath2Txt(file_loc_path_wrt,     path);
@@ -203,6 +204,8 @@ void   Data_store::saveResult()
     //savePath2TxtTum(file_loc_path_full_wrt, slam_tf_msg_vector);
 
     if(mode == 2){
+//        std:: cout << file_loc_rawPcl << std::endl;
+//        std:: cout << pcl_raw_all.width * pcl_raw_all.height << std::endl;
         pcl::io::savePCDFileASCII(file_loc_rawPcl, pcl_raw_all);
     }
 }
@@ -411,7 +414,7 @@ int main(int argc, char **argv){
         }
 
         else if(g_data.mode  == 1){
-            //ros::Subscriber grt_sub     = nh.subscribe("/pose", 500, groundTruthCallback);//vicon
+            //ros::Subscriber grt_sub = nh.subscribe("/pose", 500, groundTruthCallback);//vicon
             ros::Subscriber grt_uav_sub = nh.subscribe("/pose", 500, groundTruthUavCallback);//gps+imu
             //save path
             while(nh.ok()){
@@ -422,23 +425,27 @@ int main(int argc, char **argv){
             g_data.savePath2TxtTum(g_data.file_loc_path_grt_wrt, g_data.grt_msg_vector);
         }
 
-        else if(g_data.mode  == 2){
-            ros::Subscriber pointcloud_sub       = nh.subscribe("/velodyne_points", 10, pclCallback);
-            while (nh.ok() && g_data.registered_pcl_queue.empty()) {
-                ros::spinOnce();
-            }
-            while(!g_data.registered_pcl_queue.empty()){
-                static int skip_i = 0;
-                int skip_step = 5;
-                skip_i ++;
-                if(skip_i % skip_step == 0){
-                    pcl::PointCloud<pcl::PointXYZ> rg_pcl;
-                    pcl::fromROSMsg(g_data.registered_pcl_queue.front(), rg_pcl);
-                    g_data.pcl_raw_all = g_data.pcl_raw_all + rg_pcl;
-                    std::cout<<"step: "<< skip_i <<"num_point_all_raw_point: "<<g_data.pcl_raw_all.points.size()<<"\n";//std::endl;
+        else if(g_data.mode == 2){
+            ros::Subscriber pointcloud_sub  = nh.subscribe("/velodyne_points", 10, pclCallback);
+            while (nh.ok()){
+                while(nh.ok() && g_data.registered_pcl_queue.empty()) {
+                    ros::spinOnce();
                 }
-                g_data.registered_pcl_queue.pop();
+                while(nh.ok() && !g_data.registered_pcl_queue.empty()){
+                    static int step_i = 0;
+                    int skip_step = 5;//skip some frames to limit the size of final pcd
+                    step_i ++;
+                    if(step_i % skip_step == 0){
+                        pcl::PointCloud<pcl::PointXYZI> registered_pcl;
+                        pcl::fromROSMsg(g_data.registered_pcl_queue.front(), registered_pcl);
+                        //accumulate point cloud, your memory may be run out
+                        g_data.pcl_raw_all = g_data.pcl_raw_all + registered_pcl;
+                        std::cout << "step: " << step_i << " num_point_accumulated_point: " << g_data.pcl_raw_all.points.size() / 1000 << " k\n";
+                    }
+                    g_data.registered_pcl_queue.pop();
+                }
             }
+            g_data.saveResult();
         }
         else if(g_data.mode  ==3){
         }

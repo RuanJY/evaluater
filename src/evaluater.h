@@ -73,7 +73,7 @@ public:
     double final_avg_error = 0;
     nav_msgs::Path path_odom;
 
-    pcl::PointCloud<pcl::PointXYZ> pcl_raw_all;
+    pcl::PointCloud<pcl::PointXYZI> pcl_raw_all;
     //for MSE
     std::queue<PointMatrix> ary_last_raw_points;
     PointMatrix last_raw_points;
@@ -206,7 +206,7 @@ public:
 class Param{
 public:
     int mode;//1 grt 2 mse 3
-    std::string file_loc, file_loc_report, file_loc_final_map, file_loc_rawpcl, file_loc_grt_path;
+    std::string file_loc, file_loc_rawpcl, file_loc_grt_path;
     bool read_grt_txt;
     double timestamp_valid_thr = 0.1;
     void init(ros::NodeHandle& nh);
