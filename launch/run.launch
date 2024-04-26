@@ -1,13 +1,25 @@
     <launch>
         <node pkg="evaluater" type="evaluater" name="evaluater" output="screen">
-                <param name="mode" value="2"/>
-                <param name="file_loc" value="/home/ruanjy/Workspace/M1_ws/liosam_result/evaluater_log/seq1"/>
-                <param name="file_loc_grt_path" value="/home/ruanjy/Workspace/M1_ws/liosam_result/evaluater_log/grt_path/hkfront_ouster_10hz_path_grt.txt"/>
-                <param name="read_grt_txt" value="true"/>
-                <param name="timestamp_valid_thr" value="0.1"/>
-                <remap from="/pose" to="/lidar_odometry"/>
-                <remap from="/slam_odom" to="/lio_sam/mapping/odometry"/>
-                <remap from="/velodyne_points" to="/lio_sam/mapping/cloud_registered"/>
+            <!--
+            // grt: ground truth
+            // 0 compare online path with grt (online estimate extrinsic), grt can be read from txt file or ros topic
+            // 1 receive path and store in txt
+            // 2 accumulate registered raw pcl (for map comparison)-->
+            <param name="mode" value="2"/>
+            <!-- where to save result-->
+            <param name="file_loc" value="/home/ruanjy/Workspace/M1_ws/liosam_result/evaluater_log/seq1"/>
+            <!-- read txt grt path of listen to ros message -->
+            <param name="read_grt_txt" value="true"/>
+            <!-- where to read txt grt path-->
+            <param name="file_loc_grt_path" value="/home/ruanjy/Workspace/M1_ws/liosam_result/evaluater_log/grt_path/hkfront_ouster_10hz_path_grt.txt"/>
+            <!-- when comparing pose of slam with ground truth, maximum accepted timestamp difference-->
+            <param name="timestamp_valid_thr" value="0.1"/>
+            <!--  slam pose topic-->
+            <remap from="/pose" to="/lidar_odometry"/>
+            <!-- grt pose topic, if in mode 1, this is slam pose topic, to save the path-->
+            <remap from="/slam_odom" to="/lio_sam/mapping/odometry"/>
+            <!--  point cloud after registration to be accumulated as raw point cloud map -->
+            <remap from="/velodyne_points" to="/lio_sam/mapping/cloud_registered"/>
 <!--
 used pose topic:
 /lio_sam/mapping/odometry mems-lio lio-sam
