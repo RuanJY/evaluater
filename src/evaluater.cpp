@@ -379,22 +379,7 @@ int main(int argc, char **argv){
     while(nh.ok()){
         if(g_data.mode  == 0){
             ros::Subscriber trans_slam_sub       = nh.subscribe("/slam_odom", 500, transSlamCallback);//from slam
-            ros::Subscriber grt_uav_sub, grt_sub;
-            if(!param.read_grt_txt){
-                //grt_sub     = nh.subscribe("/pose", 500, groundTruthCallback);//vicon
-                grt_uav_sub = nh.subscribe("/pose", 500, groundTruthUavCallback);//gps+imu
-            }else{
-                std::ifstream file_grtpath_read;
-                file_grtpath_read.open (param.file_loc_grt_path, std::ios::in);
-                if(!file_grtpath_read){
-                    ROS_WARN("Can not read grt_path file");
-                }
-                geometry_msgs::PoseStamped tmp_pose_msg;
-                while(nh.ok() && txt2PoseMsg(file_grtpath_read, tmp_pose_msg)){
-                    g_data.grt_msg_vector.push_back(tmp_pose_msg);
-                }
-                std::cout<< "number pose read: " << g_data.grt_msg_vector.size() <<std::endl;
-            }
+
             bool first = true;
             while(nh.ok() && (  g_data.grt_msg_vector.empty())){
                 ros::spinOnce();
@@ -414,8 +399,23 @@ int main(int argc, char **argv){
         }
 
         else if(g_data.mode  == 1){
-            //ros::Subscriber grt_sub = nh.subscribe("/pose", 500, groundTruthCallback);//vicon
-            ros::Subscriber grt_uav_sub = nh.subscribe("/pose", 500, groundTruthUavCallback);//gps+imu
+            ros::Subscriber grt_uav_sub, grt_sub;
+            if(!param.read_grt_txt){
+                //grt_sub = nh.subscribe("/pose", 500, groundTruthCallback);//vicon, msg type: geometry_msgs::PoseStamped
+                grt_uav_sub = nh.subscribe("/pose", 500, groundTruthUavCallback);//gps+imu, msg type: nav_msgs::Odometry
+            }else{
+                std::ifstream file_grtpath_read;
+                file_grtpath_read.open (param.file_loc_grt_path, std::ios::in);
+                if(!file_grtpath_read){
+                    ROS_WARN("Can not read grt_path file");
+                }
+                geometry_msgs::PoseStamped tmp_pose_msg;
+                while(nh.ok() && txt2PoseMsg(file_grtpath_read, tmp_pose_msg)){
+                    g_data.grt_msg_vector.push_back(tmp_pose_msg);
+                }
+                std::cout<< "number pose read: " << g_data.grt_msg_vector.size() <<std::endl;
+            }
+
             //save path
             while(nh.ok()){
                 ros::spinOnce();

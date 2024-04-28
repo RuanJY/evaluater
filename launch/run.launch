@@ -2,22 +2,29 @@
         <node pkg="evaluater" type="evaluater" name="evaluater" output="screen">
             <!--
             // grt: ground truth
-            // 0 compare online path with grt (online estimate extrinsic), grt can be read from txt file or ros topic
-            // 1 receive path and store in txt
+            // 0 compare online path with grt pose (online estimate extrinsic), grt can be read from txt file or from ros topic
+            // 1 receive a path topic and store it in txt file
             // 2 accumulate registered raw pcl (for map comparison)-->
-            <param name="mode" value="2"/>
-            <!-- where to save result-->
+            <param name="mode" value="1"/>
+
+            <!-- where to save the results-->
             <param name="file_loc" value="/home/ruanjy/Workspace/M1_ws/liosam_result/evaluater_log/seq1"/>
-            <!-- read txt grt path of listen to ros message -->
-            <param name="read_grt_txt" value="true"/>
+
+            <!-- read txt grt path or listen to ros message -->
+            <param name="read_grt_txt" value="false"/>
+
             <!-- where to read txt grt path-->
             <param name="file_loc_grt_path" value="/home/ruanjy/Workspace/M1_ws/liosam_result/evaluater_log/grt_path/hkfront_ouster_10hz_path_grt.txt"/>
+
             <!-- when comparing pose of slam with ground truth, maximum accepted timestamp difference-->
             <param name="timestamp_valid_thr" value="0.1"/>
-            <!--  slam pose topic-->
-            <remap from="/pose" to="/lidar_odometry"/>
-            <!-- grt pose topic, if in mode 1, this is slam pose topic, to save the path-->
+
+            <!--  grt pose topic, if in mode 1, this is slam pose topic, to save the path -->
+            <remap from="/pose" to="/Odometry"/>
+
+            <!-- slam pose topic-->
             <remap from="/slam_odom" to="/lio_sam/mapping/odometry"/>
+
             <!--  point cloud after registration to be accumulated as raw point cloud map -->
             <remap from="/velodyne_points" to="/lio_sam/mapping/cloud_registered"/>
 <!--
@@ -30,6 +37,7 @@ used pose topic:
 /vrpn_client_node/RigidBody005/pose ground truth
 point cloud topic:
 /lio_sam/mapping/cloud_registered
+/lio_sam/mapping/cloud_registered_raw
 /turned_velodyned
 -->
         </node>
