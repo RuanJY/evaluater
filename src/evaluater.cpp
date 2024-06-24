@@ -261,6 +261,7 @@ void Param::init(ros::NodeHandle& nh){
     nh.param("evaluater/timestamp_valid_thr", timestamp_valid_thr, 0.15);
 }
 bool saveOnePoseAndPath(geometry_msgs::PoseStamped & pose_msg, PointMatrix & pose, nav_msgs::Path & path){
+
     Point tmp_point;
     tmp_point << pose_msg.pose.position.x,
             pose_msg.pose.position.y,
@@ -269,6 +270,7 @@ bool saveOnePoseAndPath(geometry_msgs::PoseStamped & pose_msg, PointMatrix & pos
     path.poses.push_back(pose_msg);
 }
 void findGrtAndSlamPoseCorrespondenceByTimeStamp(geometry_msgs::PoseStamped & grt_pose_msg){
+
     double time_slam, time_grt;
     if(g_data.grt_msg_vector.size() < 2){
         return;
@@ -317,6 +319,7 @@ void findGrtAndSlamPoseCorrespondenceByTimeStamp(geometry_msgs::PoseStamped & gr
     }*/ //not used in
 }
 void updateTransformation(geometry_msgs::PoseStamped & grt_pose_msg){
+
     if(g_data.step == 0){
         g_data.T_world_grt0 = PoseStamp2transf(grt_pose_msg);
         g_data.T_lidar0 = Odometry2transf(g_data.tf_slam_buff);
