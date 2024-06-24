@@ -34,7 +34,7 @@ Transf computeAlignTransformation(PointMatrix & scan_glb, PointMatrix & scan_now
     double detVU =  (svd.matrixV()*(svd.matrixU().adjoint())).determinant();
     Eigen::Matrix<double, 3, 3> I;
     I << 1,0,0, 0,1,0, 0,0,detVU;
-    Eigen::MatrixXd rotate = svd.matrixU()*I *(svd.matrixU().adjoint());
+    Eigen::MatrixXd rotate = svd.matrixV()*I *(svd.matrixU().adjoint());
     Eigen::Matrix<double, 3, 1 > transf = scan_glb.gravity - (rotate * scan_now.gravity);
     T << rotate, transf, 0,0,0,1;
     //T = T.inverse();
@@ -44,8 +44,8 @@ Transf computeAlignTransformation(PointMatrix & scan_glb, PointMatrix & scan_now
 double rotationError(){
     double trans_error = 0, rotation_error = 0, ori_trans_error = 0;
     Transf trans_bef_cal, trans_aft_cal; int i;
-    for(i=0; i<g_data.path.poses.size(); i++){
-        geometry_msgs::PoseStamped path_pose = g_data.path.poses[i];
+    for(i=0; i<g_data.path_slam.poses.size(); i++){
+        geometry_msgs::PoseStamped path_pose = g_data.path_slam.poses[i];
         geometry_msgs::PoseStamped pose_grt  = g_data.path_grt.poses[i];
 
         //pose->Transf
@@ -61,9 +61,9 @@ double rotationError(){
         trans_error += sqrt(pow(trans_aft_cal(0, 3) - g_data.pose_grt.point(0, i), 2) +
                             pow(trans_aft_cal(1, 3) - g_data.pose_grt.point(1, i), 2) +
                             pow(trans_aft_cal(2, 3) - g_data.pose_grt.point(2, i), 2));
-/*        ori_trans_error += sqrt(pow(g_data.pose.point(0, i) - g_data.pose_grt.point(0, i), 2) +
-                                pow(g_data.pose.point(1, i) - g_data.pose_grt.point(1, i), 2) +
-                                pow(g_data.pose.point(2, i) - g_data.pose_grt.point(2, i), 2));*/
+/*        ori_trans_error += sqrt(pow(g_data.pose_slam.point(0, i) - g_data.pose_grt.point(0, i), 2) +
+                                pow(g_data.pose_slam.point(1, i) - g_data.pose_grt.point(1, i), 2) +
+                                pow(g_data.pose_slam.point(2, i) - g_data.pose_grt.point(2, i), 2));*/
 /*        ori_trans_error += sqrt(pow(path_pose.pose.position.x - pose_grt.pose.position.x, 2) +
                                 pow(path_pose.pose.position.y - pose_grt.pose.position.y, 2) +
                                 pow(path_pose.pose.position.z - pose_grt.pose.position.z, 2));*/
@@ -102,6 +102,7 @@ double computeError(PointMatrix & _scan_glb, PointMatrix & _scan_now, double & _
                       pow(_scan_glb.point(2, i) - _scan_now.point(2, i), 2));
     }
     error /= double(i);
+
     int j=0, start = _scan_glb.num_point - 50; _past_50error = 0;
     if(start < 0) start = 0;
     for(j=start; j<_scan_glb.num_point; j++){
@@ -110,11 +111,13 @@ double computeError(PointMatrix & _scan_glb, PointMatrix & _scan_now, double & _
                               pow(_scan_glb.point(2, j) - _scan_now.point(2, j), 2));
     }
     _past_50error /= double(j-start);
+
     return error;
 }
 // Apply transformation to position and orientation
 void applyTransformation(const nav_msgs::Path& ori_path, nav_msgs::Path& after_path, const Eigen::Matrix4d& transformationMatrix)
 {
+    after_path.poses.clear();
     for (const auto& pose : ori_path.poses)
     {
         // Apply transformation to position
@@ -147,10 +150,10 @@ void applyTransformation(const nav_msgs::Path& ori_path, nav_msgs::Path& after_p
 Data_store::Data_store(){
     //pose       = Eigen::MatrixXd::Zero(3, max_size);
     //first_trans = lidar_trans = grt_first_trans = trf_odom_now = trf_odom_last = Eigen::MatrixXd::Identity(4,4);
-    path.header.frame_id      = "velodyne";
+    path_slam.header.frame_id      = "velodyne";
     path_odom.header.frame_id = "velodyne";
     path_grt.header.frame_id  = "velodyne";
-    path_full.header.frame_id = "velodyne";
+    path_slam_full.header.frame_id = "velodyne";
     pcl_raw_all.height = 1;
     pcl_raw_all.width = 0;
 }
@@ -227,10 +230,9 @@ void   Data_store::saveResult()
         std::cout << param.file_loc <<" Result not saved" << std::endl;
     }
     //save path
-    savePath2Txt(file_loc_path_wrt,     path);
-    applyTransformation(path, path_cal,T_grt_lidar);
-    savePath2Txt(file_loc_path_cal_wrt, path_cal);
-    savePath2Txt(file_loc_path_full_wrt,path_full);
+    savePath2Txt(file_loc_path_wrt,     path_slam);
+    savePath2Txt(file_loc_path_cal_wrt, path_slam_aligned);
+    savePath2Txt(file_loc_path_full_wrt, path_slam_full);
     savePath2Txt(file_loc_path_grt_wrt, path_grt);
     //savePath2TxtTum(file_loc_path_full_wrt, slam_tf_msg_vector);
 
@@ -245,9 +247,9 @@ void   Data_store::imuUpdatePose(Transf & now_slam_trans){
     Point _pose;
     _pose = trans3D(0, 0, 0, now_slam_trans);
     //pose.addPoint(_pose);
-    if(step>0) trj_length += sqrt(pow(_pose(0,0) - pose.point(0,step-1), 2) +
-                                  pow(_pose(1,0) - pose.point(1,step-1), 2) +
-                                  pow(_pose(2,0) - pose.point(2,step-1), 2));
+    if(step>0) trj_length += sqrt(pow(_pose(0,0) - pose_slam.point(0,step-1), 2) +
+                                  pow(_pose(1,0) - pose_slam.point(1,step-1), 2) +
+                                  pow(_pose(2,0) - pose_slam.point(2,step-1), 2));
 
     pushPath(Slam, now_slam_trans);
     //save path and grt_path to txt
@@ -269,6 +271,7 @@ bool saveOnePoseAndPath(geometry_msgs::PoseStamped & pose_msg, PointMatrix & pos
     path.poses.push_back(pose_msg);
 }
 bool computeOnlineError(){
+    //for one slam pose, find the closest (in time) grt pose, align two path, and calculate RMSE error
     double time_tf_slam, time_grt;
     if(g_data.grt_msg_vector.size() < 2){
         return false;
@@ -279,7 +282,7 @@ bool computeOnlineError(){
     //std::cout<<"time_grt:"<<time_grt<<' ';
     //std::cout<<"num grt:"<<g_data.grt_msg_vector.size()<<std::endl;
 
-    //move pointer to closest one
+    //move pointer to the closest one
     while( time_grt < time_tf_slam && g_data.grt_pointer+1 < g_data.grt_msg_vector.size()){
         g_data.grt_pointer ++;
         time_grt = g_data.grt_msg_vector[g_data.grt_pointer].header.stamp.toSec();
@@ -294,13 +297,13 @@ bool computeOnlineError(){
     }
     //std::cout<<std::endl<<"final time_grt:"<<time_grt<<' ';
     if(std::abs(time_tf_slam - time_grt) > param.timestamp_valid_thr){
-        std::cout<<"timestamp too far: "<<std::abs(time_tf_slam - time_grt) <<std::endl;
+        std::cout<<"no grt timestamp close to this frame pose: "<<std::abs(time_tf_slam - time_grt) <<std::endl;
         //only save path
         nav_msgs::Odometry & tf_slam_msg = g_data.tf_slam_buff;
         geometry_msgs::PoseStamped pose_stamped_msg;
         pose_stamped_msg.pose   = tf_slam_msg.pose.pose;
         pose_stamped_msg.header = tf_slam_msg.header;
-        g_data.path_full.poses.push_back(pose_stamped_msg);
+        g_data.path_slam_full.poses.push_back(pose_stamped_msg);
         return false;
     }
     //check grt jump (gps height may jump in urban area)
@@ -318,38 +321,44 @@ bool computeOnlineError(){
     }
     g_data.T_world_grt1 = PoseStamp2transf(grt_tf_msg);
     g_data.T_lidar0_lidar1 = g_data.T_lidar0.inverse() * Odometry2transf(g_data.tf_slam_buff);
-    g_data.step++;
+    g_data.step ++;
     std::cout<<"valid count:"<<g_data.step<<std::endl;
 
-    //save grt pose and path
+    //push grt pose and path
     saveOnePoseAndPath(grt_tf_msg, g_data.pose_grt, g_data.path_grt);
-    //save tf slam
+    //push tf slam
     geometry_msgs::PoseStamped pose_stamped_msg;
     pose_stamped_msg.pose   =  g_data.tf_slam_buff.pose.pose;
     pose_stamped_msg.header =  g_data.tf_slam_buff.header;
-    saveOnePoseAndPath(pose_stamped_msg, g_data.pose, g_data.path);
-    g_data.path_full.poses.push_back(pose_stamped_msg);
+    saveOnePoseAndPath(pose_stamped_msg, g_data.pose_slam, g_data.path_slam);
+    g_data.path_slam_full.poses.push_back(pose_stamped_msg);
     //calculate path legth
     if(g_data.step > 1){g_data.trj_length += sqrt(
-                pow(pose_stamped_msg.pose.position.x - g_data.pose.point(0,g_data.pose.num_point-2), 2) +
-                pow(pose_stamped_msg.pose.position.y - g_data.pose.point(1,g_data.pose.num_point-2), 2) +
-                pow(pose_stamped_msg.pose.position.z - g_data.pose.point(2,g_data.pose.num_point-2), 2));}
+                pow(pose_stamped_msg.pose.position.x - g_data.pose_slam.point(0,g_data.pose_slam.num_point-2), 2) +
+                pow(pose_stamped_msg.pose.position.y - g_data.pose_slam.point(1,g_data.pose_slam.num_point-2), 2) +
+                pow(pose_stamped_msg.pose.position.z - g_data.pose_slam.point(2,g_data.pose_slam.num_point-2), 2));}
 
     //find the transform between slam path and grt path, or named calibrate
-    //if(g_data.trj_length < 2000 * 0.3){
-    g_data.T_grt_lidar = computeAlignTransformation(g_data.pose, g_data.pose_grt);
+    //if(g_data.trj_length < 2000 * 0.3){//partially align
+    g_data.T_grt_lidar = computeAlignTransformation(g_data.pose_slam, g_data.pose_grt);
     //}
-    PointMatrix slam_pose_aligned = g_data.pose;
+    PointMatrix grt_pose_aligned = g_data.pose_grt;
     double past_50error;
-    //std::cout<<"bef_error "<<computeError(slam_pose_aligned, g_data.pose_grt, past_50error)<<std::endl;
-    g_data.T_grt_lidar = g_data.T_grt_lidar.inverse();
-    slam_pose_aligned.trans(g_data.T_grt_lidar);
-    g_data.final_avg_error = computeError(slam_pose_aligned, g_data.pose_grt, past_50error);
+    std::cout<<"bef_error "<<computeError(grt_pose_aligned, g_data.pose_slam, past_50error)<<std::endl;
+    //g_data.T_grt_lidar = g_data.T_grt_lidar.inverse();
+    grt_pose_aligned.trans(g_data.T_grt_lidar);
+    g_data.final_avg_error = computeError(grt_pose_aligned, g_data.pose_slam, past_50error);
     std::cout<<"avg_error "<<g_data.final_avg_error<<std::endl;
     std::cout<<"past50_error "<<past_50error<<std::endl;
 
+    //applyTransformation(g_data.path_slam, g_data.path_slam_aligned, g_data.T_grt_lidar);
+    applyTransformation(g_data.path_grt, g_data.path_grt_aligned, g_data.T_grt_lidar);
+    //publish a nav_msgs::Path, g_data.path_grt_aligned
+
+    g_data.path_pub.publish(g_data.path_grt_aligned);
+
     //rotation error
-    //path->path_cal
+    //path->path_slam_aligned
     //rotationError();
 
     std::cout<<"---"<<std::endl;
@@ -381,12 +390,30 @@ void transSlamCallback(const nav_msgs::Odometry::ConstPtr & odom_msg)
     //save tf slam path
     g_data.tf_slam_buff = *odom_msg;
     g_data.slam_tf_msg_vector.push_back(*odom_msg);
-    computeOnlineError();
+    if(g_data.mode  == 0){
+        computeOnlineError();
+        g_data.path_grt_aligned.header.stamp = odom_msg->header.stamp;
+        g_data.path_grt_aligned.header.frame_id =  odom_msg->header.frame_id;
+        g_data.path_grt_aligned.header.seq = odom_msg->header.seq;
+    }
 }
 void pclCallback(const sensor_msgs::PointCloud2::ConstPtr & pcl_msg)
 {
     ROS_DEBUG("PointCloud seq: [%d]", pcl_msg->header.seq);
     g_data.registered_pcl_queue.push(*pcl_msg);
+}
+void readGrtFromTxt(){
+
+    std::ifstream file_grtpath_read;
+    file_grtpath_read.open (param.file_loc_grt_path, std::ios::in);
+    if(!file_grtpath_read){
+        ROS_WARN("Can not read grt_path file");
+    }
+    geometry_msgs::PoseStamped tmp_pose_msg;
+    while(txt2PoseMsg(file_grtpath_read, tmp_pose_msg)){
+        g_data.grt_msg_vector.push_back(tmp_pose_msg);
+    }
+    std::cout<< "number pose read: " << g_data.grt_msg_vector.size() <<std::endl;
 }
 
 int main(int argc, char **argv){
@@ -402,6 +429,7 @@ int main(int argc, char **argv){
     ros::Rate r(20);//Hz
     nh.param("evaluater/mode", g_data.mode,  0);
     ros::Subscriber grt_uav_sub, grt_sub, trans_slam_sub;
+    g_data.path_pub = nh.advertise<nav_msgs::Path>("/path_grt_aligned", 1);
 
     param.init(nh);
     g_data.logInit(param.file_loc);
@@ -411,11 +439,15 @@ int main(int argc, char **argv){
     while(nh.ok()){
         if(g_data.mode  == 0){//compare online path with grt
             trans_slam_sub = nh.subscribe("/slam_odom", 500, transSlamCallback);//from slam
-            //grt_sub = nh.subscribe("/pose", 500, groundTruthCallback);//vicon, msg type: geometry_msgs::PoseStamped
-            grt_uav_sub = nh.subscribe("/pose", 500, groundTruthUavCallback);//gps+imu, msg type: nav_msgs::Odometry
-
+            if(param.read_grt_txt){
+                readGrtFromTxt();//read 6dof grt path
+            }else{
+                //grt_sub = nh.subscribe("/pose", 500, groundTruthCallback);//vicon, msg type: geometry_msgs::PoseStamped
+                grt_uav_sub = nh.subscribe("/pose", 500, groundTruthUavCallback);//gps+imu, msg type: nav_msgs::Odometry
+            }
+            //wait for the first message
             bool first = true;
-            while(nh.ok() && (  g_data.grt_msg_vector.empty())){
+            while(nh.ok() && (g_data.grt_msg_vector.empty())){
                 ros::spinOnce();
                 if(first){
                     first = false;
@@ -425,30 +457,19 @@ int main(int argc, char **argv){
                 }
                 r.sleep();
             }
+            //process intrigued by slam pose
             while(nh.ok()){
                 ros::spinOnce();
                 r.sleep();
             }
+            //save result
             g_data.saveResult();
         }
 
-        else if(g_data.mode  == 1){
-            if(!param.read_grt_txt){
-                //grt_sub = nh.subscribe("/pose", 500, groundTruthCallback);//vicon, msg type: geometry_msgs::PoseStamped
-                grt_uav_sub = nh.subscribe("/pose", 500, groundTruthUavCallback);//gps+imu, msg type: nav_msgs::Odometry
-            }else{
-                std::ifstream file_grtpath_read;
-                file_grtpath_read.open (param.file_loc_grt_path, std::ios::in);
-                if(!file_grtpath_read){
-                    ROS_WARN("Can not read grt_path file");
-                }
-                geometry_msgs::PoseStamped tmp_pose_msg;
-                while(nh.ok() && txt2PoseMsg(file_grtpath_read, tmp_pose_msg)){
-                    g_data.grt_msg_vector.push_back(tmp_pose_msg);
-                }
-                std::cout<< "number pose read: " << g_data.grt_msg_vector.size() <<std::endl;
-            }
+        else if(g_data.mode  == 1){//just receive path and store in txt
 
+            //grt_sub = nh.subscribe("/pose", 500, groundTruthCallback);//vicon, msg type: geometry_msgs::PoseStamped
+            grt_uav_sub = nh.subscribe("/pose", 500, groundTruthUavCallback);//gps+imu, msg type: nav_msgs::Odometry
             //save path
             while(nh.ok()){
                 ros::spinOnce();
@@ -458,7 +479,7 @@ int main(int argc, char **argv){
             g_data.savePath2TxtTum(g_data.file_loc_path_grt_wrt, g_data.grt_msg_vector);
         }
 
-        else if(g_data.mode == 2){
+        else if(g_data.mode == 2){//accumulate registered raw pcl
             ros::Subscriber pointcloud_sub  = nh.subscribe("/velodyne_points", 10, pclCallback);
             while (nh.ok()){
                 while(nh.ok() && g_data.registered_pcl_queue.empty()) {

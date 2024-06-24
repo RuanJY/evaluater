@@ -59,12 +59,16 @@ public:
     std::queue<sensor_msgs::PointCloud2> registered_pcl_queue;
 
     Transf T_world_grt0, T_world_grt1, T_lidar0_lidar1, T_grt_lidar, T_lidar0; //1 means final time, 0 means begin time
-    nav_msgs::Path path;
-    nav_msgs::Path path_cal;//calibrated
-    nav_msgs::Path path_full;
-    PointMatrix    pose;
+    nav_msgs::Path path_slam;//xyz and quat, corresponding to path_grt by timestamp
+    nav_msgs::Path path_slam_aligned;//aligned with path_grt
+    nav_msgs::Path path_slam_full;//all messages
+    PointMatrix    pose_slam;//only xyz
+
     nav_msgs::Path path_grt;
+    nav_msgs::Path path_grt_aligned;//aligned with path_slam
     PointMatrix    pose_grt;
+    ros::Publisher path_pub;
+
 
     ///record
     std::ofstream file_loc_report_wrt, file_loc_path_wrt, file_loc_path_cal_wrt, file_loc_path_grt_wrt, file_loc_path_full_wrt;
@@ -110,7 +114,7 @@ public:
         //save
         switch (path_type){
             case Slam:{
-                path.poses.push_back(path_tmp); break;
+                path_slam.poses.push_back(path_tmp); break;
             }
             case Odom:{
                 path_odom.poses.push_back(path_tmp); break;
@@ -126,24 +130,24 @@ public:
         //std::ofstream file_out;
         //file_out.open(file_loc, std::ios::out);
         if(file_out){
-            for(const auto& pose : pose_msg_vector){
+            for(const auto& one_pose : pose_msg_vector){
 
                 double roll, pitch, yaw;
                 tf::Quaternion quat;
-                tf::quaternionMsgToTF(pose.pose.orientation, quat);
+                tf::quaternionMsgToTF(one_pose.pose.orientation, quat);
                 tf::Matrix3x3 matrix(quat);
                 //tmp_M.getRPY(roll, pitch, yaw);
-/*                file_out << setprecision(10) << matrix[0][0] << ' ' << matrix[0][1] << ' ' << matrix[0][2] << ' ' << pose.pose.position.x << ' ' <<
-                         matrix[1][0] << ' ' << matrix[1][1] << ' ' << matrix[1][2] << ' ' << pose.pose.position.y << ' ' <<
-                         matrix[2][0] << ' ' << matrix[2][1] << ' ' << matrix[2][2] << ' ' << pose.pose.position.z << "\n";*/
-                file_out << std::setprecision(16) << pose.header.stamp.toSec() << " "
-                         << pose.pose.position.x << " "
-                         << pose.pose.position.y << " "
-                         << pose.pose.position.z << " "
-                         << pose.pose.orientation.w << " "
-                         << pose.pose.orientation.x << " "
-                         << pose.pose.orientation.y << " "
-                         << pose.pose.orientation.z << "\n";
+/*                file_out << setprecision(10) << matrix[0][0] << ' ' << matrix[0][1] << ' ' << matrix[0][2] << ' ' << one_pose.one_pose.position.x << ' ' <<
+                         matrix[1][0] << ' ' << matrix[1][1] << ' ' << matrix[1][2] << ' ' << one_pose.one_pose.position.y << ' ' <<
+                         matrix[2][0] << ' ' << matrix[2][1] << ' ' << matrix[2][2] << ' ' << one_pose.one_pose.position.z << "\n";*/
+                file_out << std::setprecision(16) << one_pose.header.stamp.toSec() << " "
+                         << one_pose.pose.position.x << " "
+                         << one_pose.pose.position.y << " "
+                         << one_pose.pose.position.z << " "
+                         << one_pose.pose.orientation.w << " "
+                         << one_pose.pose.orientation.x << " "
+                         << one_pose.pose.orientation.y << " "
+                         << one_pose.pose.orientation.z << "\n";
                          //<< roll << "," << pitch << "," << yaw << "\n";
             }
         }
