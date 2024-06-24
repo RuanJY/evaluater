@@ -193,34 +193,54 @@ void   Data_store::saveResult()
     std::cout << "Saving result..." << std::endl;
     std::cout<<std::setprecision(10)<<setiosflags(std::ios::fixed);
     //kitti like RTE compute
-    Transf trans_error = (T_world_grt0 * T_grt_lidar * T_lidar0_lidar1).inverse() * T_world_grt1 * T_grt_lidar;//right?
-    double translation_error = std::abs(trans_error(0,3)) + std::abs(trans_error(1,3)) + std::abs(trans_error(2,3));
-    State state_error = trans32quat2state(trans_error);
+    Transf transformation_error = (T_world_grt0 * T_grt_lidar * T_lidar0_lidar1).inverse() * T_world_grt1 * T_grt_lidar;
+    double translation_error = sqrt(transformation_error(0, 3) * transformation_error(0, 3) +
+                                    transformation_error(1, 3) * transformation_error(1, 3) +
+                                    transformation_error(2, 3) * transformation_error(2, 3));
+    double start_to_end_displacement = sqrt(T_lidar0_lidar1(0, 3) * T_lidar0_lidar1(0, 3)
+                                          + T_lidar0_lidar1(1, 3) * T_lidar0_lidar1(1, 3)
+                                          + T_lidar0_lidar1(2, 3) * T_lidar0_lidar1(2, 3));
+
+    State state_error = trans32quat2state(transformation_error);
     double rotation_error = std::abs(state_error(3,0)) + std::abs(state_error(4,0)) + std::abs(state_error(5,0));
     //print
-    /*std::cout << "trans_error: \n" << trans_error << std::endl
-              << "tra_error: " << translation_error << std::endl
-              << "rel_tra_error: " << translation_error/trj_length << std::endl
-              << "rotation_error: " << rotation_error << std::endl
-              << "TRJ LENGTH: " << trj_length << std::endl
-              << "avg error: " << trj_length << std::endl;*/
+    std::cout
+            << "step: " << step << "\n"
+            << "trajectory_length: " << trj_length << std::endl
+
+            << "RMSE translation " << final_avg_error << std::endl
+            << "start_to_end_displacement " << start_to_end_displacement << std::endl
+            << "translation_error: " << translation_error << std::endl
+            << "rel_translation_error: " << 100 * translation_error/trj_length << "%"<<std::endl
+            << "transformation_error: \n" << transformation_error << std::endl
+
+            //<< "rotation_error: " << rotation_error << std::endl
+            << "T_grt_lidar: \n" << T_grt_lidar << std::endl
+            //<< "T_world_grt0: \n"     << T_world_grt0 << std::endl
+            << "T_lidar0_lidar1: \n" << T_lidar0_lidar1 << std::endl
+            //<< "T_world_grt1: \n"     << T_world_grt1
+            << std::endl;
     //std::cout<<"avg_error "<<final_avg_error<<std::endl;
 
     //std::cout << "\nERROR : \n" <<sqrt(pow(pose(0,step)-254.513,2) + pow(pose(1,step)-658.088,2) + pow(pose(2,step)-68.2958,2))<< std::endl;
     //save report
     if(file_loc_report_wrt){
-        file_loc_report_wrt << "step: " << step << "\n"
-                  <<"avg_translation_error "<<final_avg_error<<std::endl
-                  //<< "trans_error: \n" << trans_error << std::endl
-                  //<< "translation_error: " << translation_error << std::endl
-                  //<< "rel_translation_error: " << 100 * translation_error/trj_length << "%"<<std::endl
-                  //<< "rotation_error: " << rotation_error << std::endl
-                  << "TRJ LENGTH: " << trj_length << std::endl
-                  << "T_grt_lidar: \n" << T_grt_lidar << std::endl
-                  //<< "T_world_grt0: \n"     << T_world_grt0 << std::endl
-                  << "T_lidar0_lidar1: \n" << T_lidar0_lidar1 << std::endl
-                  //<< "T_world_grt1: \n"     << T_world_grt1
-                  << std::endl;
+        file_loc_report_wrt
+                << "step: " << step << "\n"
+                << "trajectory_length: " << trj_length << std::endl
+
+                << "RMSE translation " << final_avg_error << std::endl
+                << "start_to_end_displacement " << start_to_end_displacement << std::endl
+                << "translation_error: " << translation_error << std::endl
+                << "rel_translation_error: " << 100 * translation_error/trj_length << "%"<<std::endl
+                << "transformation_error: \n" << transformation_error << std::endl
+
+                //<< "rotation_error: " << rotation_error << std::endl
+            << "T_grt_lidar: \n" << T_grt_lidar << std::endl
+            //<< "T_world_grt0: \n"     << T_world_grt0 << std::endl
+            << "T_lidar0_lidar1: \n" << T_lidar0_lidar1 << std::endl
+            //<< "T_world_grt1: \n"     << T_world_grt1
+            << std::endl;
         std::cout << "Result saved in: " << param.file_loc << std::endl;
         file_loc_report_wrt.close();
     }
