@@ -5,7 +5,7 @@
             // 0 compare online path with grt pose (online estimate extrinsic), grt can be read from txt file or from ros topic
             // 1 receive a path topic and store it in txt file
             // 2 accumulate registered raw pcl (for map comparison)-->
-            <param name="mode" value="1"/>
+            <param name="mode" value="0"/>
 
             <!-- where to save the results-->
             <param name="file_loc" value="/home/ruanjy/Workspace/M1_ws/liosam_result/evaluater_log/seq1"/>
@@ -20,7 +20,7 @@
             <param name="timestamp_valid_thr" value="0.1"/>
 
             <!--  grt pose topic, if in mode 1, this is slam pose topic, to save the path -->
-            <remap from="/pose" to="/Odometry"/>
+            <remap from="/pose" to="/mavros/global_position/local"/>
 
             <!-- slam pose topic-->
             <remap from="/slam_odom" to="/lio_sam/mapping/odometry"/>
@@ -34,6 +34,7 @@ used pose topic:
 /Odometry fastlio
 /lidar_odometr slamesh
 /mavros/local_position/odom px4
+/mavros/global_position/local
 /vrpn_client_node/RigidBody005/pose ground truth
 point cloud topic:
 /lio_sam/mapping/cloud_registered

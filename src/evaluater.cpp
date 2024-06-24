@@ -12,35 +12,34 @@
 #include "evaluater.h"
 Param param;//initialize ros parameters
 Data_store g_data;//initialize global variables
-Transf computeExtrinsic(PointMatrix &_scan_glb, PointMatrix &_scan_now){
+Transf computeAlignTransformation(PointMatrix & scan_glb, PointMatrix & scan_now){
 
-    Transf R = Eigen::MatrixXd::Identity(4, 4);
-    if((_scan_glb.num_point == 0)||(_scan_now.num_point == 0)){
+    Transf T = Eigen::MatrixXd::Identity(4, 4);
+    if((scan_glb.num_point == 0) || (scan_now.num_point == 0)){
         ROS_ERROR("0 point in computeRT");
-        return R;
+        return T;
     }
-    if((_scan_glb.num_point != _scan_now.num_point)){
+    if((scan_glb.num_point != scan_now.num_point)){
         ROS_ERROR("Different num of points in computeRT");
-        std::cout<<"num1 "<<_scan_glb.num_point<<" num2 "<<_scan_now.num_point<<std::endl;
-        return R;
+        std::cout << "num1 " << scan_glb.num_point << " num2 " << scan_now.num_point << std::endl;
+        return T;
     }
-    _scan_glb.mse_eig();
-    _scan_now.mse_eig();
+    scan_glb.mse_eig();
+    scan_now.mse_eig();
 
-    Eigen::MatrixXd M = ((_scan_now.point.leftCols(_scan_now.num_point).colwise()-_scan_now.gravity)*
-                         ((_scan_glb.point.leftCols(_scan_glb.num_point).colwise()-_scan_glb.gravity).transpose()))/ _scan_now.num_point;
+    Eigen::MatrixXd M = ((scan_now.point.leftCols(scan_now.num_point).colwise() - scan_now.gravity) *
+                        ((scan_glb.point.leftCols(scan_glb.num_point).colwise() - scan_glb.gravity).transpose())) / scan_now.num_point;
 
     Eigen::JacobiSVD<Eigen::MatrixXd> svd(M, Eigen::ComputeThinU | Eigen::ComputeThinV );
-    Eigen::MatrixXd V = svd.matrixV(), U = svd.matrixU();
-    double detVU =  (V*(U.adjoint())).determinant();
-    //std::cout<<detVU<<std::endl;
+    double detVU =  (svd.matrixV()*(svd.matrixU().adjoint())).determinant();
     Eigen::Matrix<double, 3, 3> I;
-    I << 1,0,0, 0,1,0, 0,0,detVU;//?
-    Eigen::MatrixXd rotate = V*I *(U.adjoint());
-    Eigen::Matrix<double, 3, 1 > transf = _scan_glb.gravity - (rotate * _scan_now.gravity);
-    R << rotate, transf, 0,0,0,1;
-    //std::cout << "Rnew:" << std::endl << R << std::endl;
-    return R;
+    I << 1,0,0, 0,1,0, 0,0,detVU;
+    Eigen::MatrixXd rotate = svd.matrixU()*I *(svd.matrixU().adjoint());
+    Eigen::Matrix<double, 3, 1 > transf = scan_glb.gravity - (rotate * scan_now.gravity);
+    T << rotate, transf, 0,0,0,1;
+    //T = T.inverse();
+    //std::cout << "Rnew:" << std::endl << T << std::endl;
+    return T;
 }
 double rotationError(){
     double trans_error = 0, rotation_error = 0, ori_trans_error = 0;
@@ -113,7 +112,38 @@ double computeError(PointMatrix & _scan_glb, PointMatrix & _scan_now, double & _
     _past_50error /= double(j-start);
     return error;
 }
+// Apply transformation to position and orientation
+void applyTransformation(const nav_msgs::Path& ori_path, nav_msgs::Path& after_path, const Eigen::Matrix4d& transformationMatrix)
+{
+    for (const auto& pose : ori_path.poses)
+    {
+        // Apply transformation to position
+        Eigen::Vector4d position(pose.pose.position.x, pose.pose.position.y, pose.pose.position.z, 1.0);
+        Eigen::Vector4d transformedPosition = transformationMatrix * position;
+        geometry_msgs::PoseStamped tmp_pose;
+        tmp_pose.pose.position.x = transformedPosition(0);
+        tmp_pose.pose.position.y = transformedPosition(1);
+        tmp_pose.pose.position.z = transformedPosition(2);
 
+        // Apply transformation to orientation
+        Eigen::Quaterniond orientation(
+                pose.pose.orientation.w,
+                pose.pose.orientation.x,
+                pose.pose.orientation.y,
+                pose.pose.orientation.z
+        );
+        Eigen::Matrix3d ori_rotation_matrix = orientation.toRotationMatrix();
+
+        Eigen::Matrix3d after_rotationMatrix = transformationMatrix.block(0, 0, 3, 3) * ori_rotation_matrix;
+        Eigen::Quaterniond transformedOrientation(after_rotationMatrix);
+        tmp_pose.pose.orientation.w = transformedOrientation.w();
+        tmp_pose.pose.orientation.x = transformedOrientation.x();
+        tmp_pose.pose.orientation.y = transformedOrientation.y();
+        tmp_pose.pose.orientation.z = transformedOrientation.z();
+
+        after_path.poses.push_back(tmp_pose);
+    }
+}
 Data_store::Data_store(){
     //pose       = Eigen::MatrixXd::Zero(3, max_size);
     //first_trans = lidar_trans = grt_first_trans = trf_odom_now = trf_odom_last = Eigen::MatrixXd::Identity(4,4);
@@ -198,6 +228,7 @@ void   Data_store::saveResult()
     }
     //save path
     savePath2Txt(file_loc_path_wrt,     path);
+    applyTransformation(path, path_cal,T_grt_lidar);
     savePath2Txt(file_loc_path_cal_wrt, path_cal);
     savePath2Txt(file_loc_path_full_wrt,path_full);
     savePath2Txt(file_loc_path_grt_wrt, path_grt);
@@ -306,14 +337,14 @@ bool computeOnlineError(){
 
     //find the transform between slam path and grt path, or named calibrate
     //if(g_data.trj_length < 2000 * 0.3){
-    g_data.T_grt_lidar = computeExtrinsic(g_data.pose, g_data.pose_grt);
+    g_data.T_grt_lidar = computeAlignTransformation(g_data.pose, g_data.pose_grt);
     //}
-    PointMatrix tmp_pose = g_data.pose;
+    PointMatrix slam_pose_aligned = g_data.pose;
     double past_50error;
-    //std::cout<<"bef_error "<<computeError(tmp_pose, g_data.pose_grt, past_50error)<<std::endl;
+    //std::cout<<"bef_error "<<computeError(slam_pose_aligned, g_data.pose_grt, past_50error)<<std::endl;
     g_data.T_grt_lidar = g_data.T_grt_lidar.inverse();
-    tmp_pose.trans(g_data.T_grt_lidar);
-    g_data.final_avg_error = computeError(tmp_pose, g_data.pose_grt, past_50error);
+    slam_pose_aligned.trans(g_data.T_grt_lidar);
+    g_data.final_avg_error = computeError(slam_pose_aligned, g_data.pose_grt, past_50error);
     std::cout<<"avg_error "<<g_data.final_avg_error<<std::endl;
     std::cout<<"past50_error "<<past_50error<<std::endl;
 
@@ -370,6 +401,7 @@ int main(int argc, char **argv){
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);//Debug Info
     ros::Rate r(20);//Hz
     nh.param("evaluater/mode", g_data.mode,  0);
+    ros::Subscriber grt_uav_sub, grt_sub, trans_slam_sub;
 
     param.init(nh);
     g_data.logInit(param.file_loc);
@@ -377,8 +409,10 @@ int main(int argc, char **argv){
     //process
     std::cout<<"====START===="<<std::endl;
     while(nh.ok()){
-        if(g_data.mode  == 0){
-            ros::Subscriber trans_slam_sub       = nh.subscribe("/slam_odom", 500, transSlamCallback);//from slam
+        if(g_data.mode  == 0){//compare online path with grt
+            trans_slam_sub = nh.subscribe("/slam_odom", 500, transSlamCallback);//from slam
+            //grt_sub = nh.subscribe("/pose", 500, groundTruthCallback);//vicon, msg type: geometry_msgs::PoseStamped
+            grt_uav_sub = nh.subscribe("/pose", 500, groundTruthUavCallback);//gps+imu, msg type: nav_msgs::Odometry
 
             bool first = true;
             while(nh.ok() && (  g_data.grt_msg_vector.empty())){
@@ -399,7 +433,6 @@ int main(int argc, char **argv){
         }
 
         else if(g_data.mode  == 1){
-            ros::Subscriber grt_uav_sub, grt_sub;
             if(!param.read_grt_txt){
                 //grt_sub = nh.subscribe("/pose", 500, groundTruthCallback);//vicon, msg type: geometry_msgs::PoseStamped
                 grt_uav_sub = nh.subscribe("/pose", 500, groundTruthUavCallback);//gps+imu, msg type: nav_msgs::Odometry
