@@ -62,7 +62,7 @@ public:
     nav_msgs::Path path_slam;//xyz and quat, corresponding to path_grt by timestamp
     nav_msgs::Path path_slam_aligned;//aligned with path_grt
     nav_msgs::Path path_slam_full;//all messages
-    PointMatrix    pose_slam;//only xyz
+    PointMatrix    position_slam;//only xyz
 
     nav_msgs::Path path_grt;
     nav_msgs::Path path_grt_aligned;//aligned with path_slam

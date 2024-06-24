@@ -12,6 +12,7 @@
 #include "evaluater.h"
 Param param;//initialize ros parameters
 Data_store g_data;//initialize global variables
+
 Transf computeAlignTransformation(PointMatrix & scan_glb, PointMatrix & scan_now){
 
     Transf T = Eigen::MatrixXd::Identity(4, 4);
@@ -61,9 +62,9 @@ double rotationError(){
         trans_error += sqrt(pow(trans_aft_cal(0, 3) - g_data.pose_grt.point(0, i), 2) +
                             pow(trans_aft_cal(1, 3) - g_data.pose_grt.point(1, i), 2) +
                             pow(trans_aft_cal(2, 3) - g_data.pose_grt.point(2, i), 2));
-/*        ori_trans_error += sqrt(pow(g_data.pose_slam.point(0, i) - g_data.pose_grt.point(0, i), 2) +
-                                pow(g_data.pose_slam.point(1, i) - g_data.pose_grt.point(1, i), 2) +
-                                pow(g_data.pose_slam.point(2, i) - g_data.pose_grt.point(2, i), 2));*/
+/*        ori_trans_error += sqrt(pow(g_data.position_slam.point(0, i) - g_data.pose_grt.point(0, i), 2) +
+                                pow(g_data.position_slam.point(1, i) - g_data.pose_grt.point(1, i), 2) +
+                                pow(g_data.position_slam.point(2, i) - g_data.pose_grt.point(2, i), 2));*/
 /*        ori_trans_error += sqrt(pow(path_pose.pose.position.x - pose_grt.pose.position.x, 2) +
                                 pow(path_pose.pose.position.y - pose_grt.pose.position.y, 2) +
                                 pow(path_pose.pose.position.z - pose_grt.pose.position.z, 2));*/
@@ -93,7 +94,7 @@ double rotationError(){
     std::cout<<"new trans error "<<trans_error<<std::endl;
     std::cout<<"rotation_error "<<rotation_error<<std::endl;
 }
-double computeError(PointMatrix & _scan_glb, PointMatrix & _scan_now, double & _past_50error){
+double computeTranslationError(PointMatrix & _scan_glb, PointMatrix & _scan_now, double & _past_50error){
 
     double error = 0; int i;
     for(i=0; i<_scan_glb.num_point; i++){
@@ -114,9 +115,9 @@ double computeError(PointMatrix & _scan_glb, PointMatrix & _scan_now, double & _
 
     return error;
 }
-// Apply transformation to position and orientation
-void applyTransformation(const nav_msgs::Path& ori_path, nav_msgs::Path& after_path, const Eigen::Matrix4d& transformationMatrix)
-{
+void transformPath(const nav_msgs::Path& ori_path, nav_msgs::Path& after_path, const Eigen::Matrix4d& transformationMatrix)
+{// Apply transformation to position and orientation
+
     after_path.poses.clear();
     for (const auto& pose : ori_path.poses)
     {
@@ -150,10 +151,7 @@ void applyTransformation(const nav_msgs::Path& ori_path, nav_msgs::Path& after_p
 Data_store::Data_store(){
     //pose       = Eigen::MatrixXd::Zero(3, max_size);
     //first_trans = lidar_trans = grt_first_trans = trf_odom_now = trf_odom_last = Eigen::MatrixXd::Identity(4,4);
-    path_slam.header.frame_id      = "velodyne";
-    path_odom.header.frame_id = "velodyne";
-    path_grt.header.frame_id  = "velodyne";
-    path_slam_full.header.frame_id = "velodyne";
+
     pcl_raw_all.height = 1;
     pcl_raw_all.width = 0;
 }
@@ -247,9 +245,9 @@ void   Data_store::imuUpdatePose(Transf & now_slam_trans){
     Point _pose;
     _pose = trans3D(0, 0, 0, now_slam_trans);
     //pose.addPoint(_pose);
-    if(step>0) trj_length += sqrt(pow(_pose(0,0) - pose_slam.point(0,step-1), 2) +
-                                  pow(_pose(1,0) - pose_slam.point(1,step-1), 2) +
-                                  pow(_pose(2,0) - pose_slam.point(2,step-1), 2));
+    if(step>0) trj_length += sqrt(pow(_pose(0,0) - position_slam.point(0, step - 1), 2) +
+                                  pow(_pose(1,0) - position_slam.point(1, step - 1), 2) +
+                                  pow(_pose(2,0) - position_slam.point(2, step - 1), 2));
 
     pushPath(Slam, now_slam_trans);
     //save path and grt_path to txt
@@ -270,89 +268,103 @@ bool saveOnePoseAndPath(geometry_msgs::PoseStamped & pose_msg, PointMatrix & pos
     pose.addPoint(tmp_point);
     path.poses.push_back(pose_msg);
 }
-bool computeOnlineError(){
-    //for one slam pose, find the closest (in time) grt pose, align two path, and calculate RMSE error
-    double time_tf_slam, time_grt;
+void findGrtAndSlamPoseCorrespondenceByTimeStamp(geometry_msgs::PoseStamped & grt_pose_msg){
+    double time_slam, time_grt;
     if(g_data.grt_msg_vector.size() < 2){
-        return false;
+        return;
     }
-    time_tf_slam = g_data.tf_slam_buff.header.stamp.toSec();
+    //for this slam pose
+    time_slam = g_data.tf_slam_buff.header.stamp.toSec();
+    //find a grt pose with the closest time
     time_grt = g_data.grt_msg_vector[g_data.grt_pointer].header.stamp.toSec();
-    //std::cout<<"time_tf_slam:"<<time_tf_slam<<std::endl;
+    //std::cout<<"time_slam:"<<time_slam<<std::endl;
     //std::cout<<"time_grt:"<<time_grt<<' ';
     //std::cout<<"num grt:"<<g_data.grt_msg_vector.size()<<std::endl;
 
-    //move pointer to the closest one
-    while( time_grt < time_tf_slam && g_data.grt_pointer+1 < g_data.grt_msg_vector.size()){
+    //move the pointer, grt is older than the slam pose
+    while(time_grt < time_slam && g_data.grt_pointer + 1 < g_data.grt_msg_vector.size()){
         g_data.grt_pointer ++;
         time_grt = g_data.grt_msg_vector[g_data.grt_pointer].header.stamp.toSec();
         //std::cout<<time_grt<<' ';
     }
-    if(g_data.grt_pointer+1 < g_data.grt_msg_vector.size()){
-        double a_step_forward_time_grt = g_data.grt_msg_vector[g_data.grt_pointer+1].header.stamp.toSec();
-        if(abs(a_step_forward_time_grt - time_tf_slam) < abs(time_grt - time_tf_slam)){
+    if(g_data.grt_pointer + 1 < g_data.grt_msg_vector.size()){
+        //if found the older grt, then find the newer grt
+        double a_step_forward_time_grt = g_data.grt_msg_vector[g_data.grt_pointer + 1].header.stamp.toSec();
+        //chose the closer one
+        if(abs(a_step_forward_time_grt - time_slam) < abs(time_grt - time_slam)){
             g_data.grt_pointer ++;
             time_grt = a_step_forward_time_grt;
         }
     }
     //std::cout<<std::endl<<"final time_grt:"<<time_grt<<' ';
-    if(std::abs(time_tf_slam - time_grt) > param.timestamp_valid_thr){
-        std::cout<<"no grt timestamp close to this frame pose: "<<std::abs(time_tf_slam - time_grt) <<std::endl;
+    //check timestamp not too far
+    if(std::abs(time_slam - time_grt) > param.timestamp_valid_thr){
+        std::cout << "no grt timestamp close to this frame pose: " << std::abs(time_slam - time_grt) << std::endl;
         //only save path
         nav_msgs::Odometry & tf_slam_msg = g_data.tf_slam_buff;
         geometry_msgs::PoseStamped pose_stamped_msg;
         pose_stamped_msg.pose   = tf_slam_msg.pose.pose;
         pose_stamped_msg.header = tf_slam_msg.header;
         g_data.path_slam_full.poses.push_back(pose_stamped_msg);
-        return false;
+        return;
     }
-    //check grt jump (gps height may jump in urban area)
-    geometry_msgs::PoseStamped & grt_tf_msg = g_data.grt_msg_vector[g_data.grt_pointer];
+    grt_pose_msg = g_data.grt_msg_vector[g_data.grt_pointer];
     geometry_msgs::PoseStamped & last_tf_msg = g_data.grt_msg_vector[g_data.grt_pointer - 1];
-    /*if(grt_tf_msg.pose.position.z - last_tf_msg.pose.position.z > 10 ||
-       grt_tf_msg.pose.position.z < -20){
-        //grt_tf_msg.pose.pose.position.z = last_tf_msg.pose.pose.position.z;
+    /*if(grt_pose_msg.pose.position.z - last_tf_msg.pose.position.z > 10 ||
+       grt_pose_msg.pose.position.z < -20){
+        //grt_pose_msg.pose.pose.position.z = last_tf_msg.pose.pose.position.z;
         continue;
     }*/ //not used in
-    //valid
+}
+void updateTransformation(geometry_msgs::PoseStamped & grt_pose_msg){
     if(g_data.step == 0){
-        g_data.T_world_grt0 = PoseStamp2transf(grt_tf_msg);
+        g_data.T_world_grt0 = PoseStamp2transf(grt_pose_msg);
         g_data.T_lidar0 = Odometry2transf(g_data.tf_slam_buff);
     }
-    g_data.T_world_grt1 = PoseStamp2transf(grt_tf_msg);
+    g_data.T_world_grt1 = PoseStamp2transf(grt_pose_msg);
     g_data.T_lidar0_lidar1 = g_data.T_lidar0.inverse() * Odometry2transf(g_data.tf_slam_buff);
-    g_data.step ++;
-    std::cout<<"valid count:"<<g_data.step<<std::endl;
 
     //push grt pose and path
-    saveOnePoseAndPath(grt_tf_msg, g_data.pose_grt, g_data.path_grt);
+    saveOnePoseAndPath(grt_pose_msg, g_data.pose_grt, g_data.path_grt);
     //push tf slam
     geometry_msgs::PoseStamped pose_stamped_msg;
     pose_stamped_msg.pose   =  g_data.tf_slam_buff.pose.pose;
     pose_stamped_msg.header =  g_data.tf_slam_buff.header;
-    saveOnePoseAndPath(pose_stamped_msg, g_data.pose_slam, g_data.path_slam);
+    saveOnePoseAndPath(pose_stamped_msg, g_data.position_slam, g_data.path_slam);
     g_data.path_slam_full.poses.push_back(pose_stamped_msg);
+
     //calculate path legth
-    if(g_data.step > 1){g_data.trj_length += sqrt(
-                pow(pose_stamped_msg.pose.position.x - g_data.pose_slam.point(0,g_data.pose_slam.num_point-2), 2) +
-                pow(pose_stamped_msg.pose.position.y - g_data.pose_slam.point(1,g_data.pose_slam.num_point-2), 2) +
-                pow(pose_stamped_msg.pose.position.z - g_data.pose_slam.point(2,g_data.pose_slam.num_point-2), 2));}
+    if(g_data.step > 1){
+        g_data.trj_length += sqrt(
+                pow(pose_stamped_msg.pose.position.x - g_data.position_slam.point(0, g_data.position_slam.num_point - 2), 2) +
+                pow(pose_stamped_msg.pose.position.y - g_data.position_slam.point(1, g_data.position_slam.num_point - 2), 2) +
+                pow(pose_stamped_msg.pose.position.z - g_data.position_slam.point(2, g_data.position_slam.num_point - 2), 2));
+    }
+}
+bool computeOnlineError(){
+    //for one slam pose, find the closest (in time) grt pose, align two path, and calculate RMSE error
+    geometry_msgs::PoseStamped grt_tf_msg;
+    findGrtAndSlamPoseCorrespondenceByTimeStamp(grt_tf_msg);
+    //valid
+    updateTransformation(grt_tf_msg);
+    g_data.step ++;
+    std::cout<<"valid count:"<<g_data.step<<std::endl;
 
     //find the transform between slam path and grt path, or named calibrate
     //if(g_data.trj_length < 2000 * 0.3){//partially align
-    g_data.T_grt_lidar = computeAlignTransformation(g_data.pose_slam, g_data.pose_grt);
+    g_data.T_grt_lidar = computeAlignTransformation(g_data.position_slam, g_data.pose_grt);
     //}
     PointMatrix grt_pose_aligned = g_data.pose_grt;
     double past_50error;
-    std::cout<<"bef_error "<<computeError(grt_pose_aligned, g_data.pose_slam, past_50error)<<std::endl;
+    //std::cout << "bef_error " << computeTranslationError(grt_pose_aligned, g_data.position_slam, past_50error) << std::endl;
     //g_data.T_grt_lidar = g_data.T_grt_lidar.inverse();
     grt_pose_aligned.trans(g_data.T_grt_lidar);
-    g_data.final_avg_error = computeError(grt_pose_aligned, g_data.pose_slam, past_50error);
+    g_data.final_avg_error = computeTranslationError(grt_pose_aligned, g_data.position_slam, past_50error);
     std::cout<<"avg_error "<<g_data.final_avg_error<<std::endl;
     std::cout<<"past50_error "<<past_50error<<std::endl;
 
-    //applyTransformation(g_data.path_slam, g_data.path_slam_aligned, g_data.T_grt_lidar);
-    applyTransformation(g_data.path_grt, g_data.path_grt_aligned, g_data.T_grt_lidar);
+    //transformPath(g_data.path_slam, g_data.path_slam_aligned, g_data.T_grt_lidar);
+    transformPath(g_data.path_grt, g_data.path_grt_aligned, g_data.T_grt_lidar);
     //publish a nav_msgs::Path, g_data.path_grt_aligned
 
     g_data.path_pub.publish(g_data.path_grt_aligned);
@@ -369,19 +381,31 @@ void groundTruthCallback(const geometry_msgs::PoseStamped::ConstPtr & ground_tru
     //used in optitrack system
     ROS_DEBUG("GroundTruth seq: [%d]", ground_truth_msg->header.seq);
     //save grt path
-    geometry_msgs::PoseStamped tmp_msg = *ground_truth_msg;
-    g_data.grt_msg_vector.push_back(tmp_msg);
+    g_data.grt_msg_vector.push_back(*ground_truth_msg);
     //std::cout<<"size of buff"<<g_data.grt_msg_vector.size()<<std::endl;
+    static bool first = true;
+    if(first){
+        g_data.path_grt.header.frame_id  = ground_truth_msg->header.frame_id;
+        g_data.path_grt_aligned.header.frame_id =  ground_truth_msg->header.frame_id;
+        first = false;
+    }
 }
 void groundTruthUavCallback(const nav_msgs::Odometry::ConstPtr & odom_msg)
 {
     //used in uav system
     ROS_DEBUG("GroundTruthUAV time: [%f]", odom_msg->header.stamp.toSec());
+    //convert to PoseStamped
     geometry_msgs::PoseStamped pose_tmp;
     pose_tmp.header = odom_msg->header;
     pose_tmp.pose = odom_msg->pose.pose;
     g_data.grt_msg_vector.push_back(pose_tmp);
     //std::cout<<"size of buff"<<g_data.grt_msg_vector.size()<<std::endl;
+    static bool first = true;
+    if(first){
+        g_data.path_grt.header.frame_id  = odom_msg->header.frame_id;
+        g_data.path_grt_aligned.header.frame_id =  odom_msg->header.frame_id;
+        first = false;
+    }
 }
 void transSlamCallback(const nav_msgs::Odometry::ConstPtr & odom_msg)
 {
@@ -392,10 +416,15 @@ void transSlamCallback(const nav_msgs::Odometry::ConstPtr & odom_msg)
     g_data.slam_tf_msg_vector.push_back(*odom_msg);
     if(g_data.mode  == 0){
         computeOnlineError();
-        g_data.path_grt_aligned.header.stamp = odom_msg->header.stamp;
         g_data.path_grt_aligned.header.frame_id =  odom_msg->header.frame_id;
-        g_data.path_grt_aligned.header.seq = odom_msg->header.seq;
     }
+    static bool first = true;
+    if(first){
+        g_data.path_slam.header.frame_id = odom_msg->header.frame_id;
+        g_data.path_slam_full.header.frame_id = odom_msg->header.frame_id;
+        first = false;
+    }
+
 }
 void pclCallback(const sensor_msgs::PointCloud2::ConstPtr & pcl_msg)
 {
