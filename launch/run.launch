@@ -20,7 +20,7 @@
             <param name="timestamp_valid_thr" value="0.1"/>
 
             <!--  grt pose topic, if in mode 1, this is slam pose topic, to save the path -->
-            <remap from="/pose" to="/mavros/global_position/local"/>
+            <remap from="/pose" to="/odom"/>
 
             <!-- slam pose topic-->
             <remap from="/slam_odom" to="/lio_sam/mapping/odometry"/>

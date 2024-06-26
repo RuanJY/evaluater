@@ -52,9 +52,10 @@ enum PathType{
 class Data_store{//global state
 public:
     int mode;
-    std::vector<geometry_msgs::PoseStamped> grt_msg_vector;
-    nav_msgs::Odometry tf_slam_buff;
-    std::vector<nav_msgs::Odometry> slam_tf_msg_vector;
+    std::vector<geometry_msgs::PoseStamped> grt_pose_vector;
+    std::vector<nav_msgs::Odometry> grt_odom_vector;
+    nav_msgs::Odometry slam_odom_buff;
+    std::vector<nav_msgs::Odometry> slam_odom_vector;
     int grt_pointer = 0;
     std::queue<sensor_msgs::PointCloud2> registered_pcl_queue;
 
@@ -149,6 +150,47 @@ public:
                          << one_pose.pose.orientation.y << " "
                          << one_pose.pose.orientation.z << "\n";
                          //<< roll << "," << pitch << "," << yaw << "\n";
+            }
+        }
+        else{
+            std::cout<<"Can not open file: " <<"\n";
+        }
+        file_out.close();
+    }
+    void saveOdom2Txt(std::ofstream & file_out, const std::vector<nav_msgs::Odometry> & odom_vector){
+        //output odom msg
+        //std::ofstream file_out;
+        //file_out.open(file_loc, std::ios::out);
+        if(file_out){
+            for(const auto& odom : odom_vector){
+                file_out << std::setprecision(16) << odom.header.stamp.toSec() << " "
+                         << odom.pose.pose.position.x << " "
+                         << odom.pose.pose.position.y << " "
+                         << odom.pose.pose.position.z << " "
+                         << odom.pose.pose.orientation.w << " "
+                         << odom.pose.pose.orientation.x << " "
+                         << odom.pose.pose.orientation.y << " "
+                         << odom.pose.pose.orientation.z << " "
+                         << odom.twist.twist.linear.x << " "
+                         << odom.twist.twist.linear.y << " "
+                         << odom.twist.twist.linear.z << " "
+                         << odom.twist.twist.angular.x << " "
+                         << odom.twist.twist.angular.y << " "
+                         << odom.twist.twist.angular.z << " "
+                         << odom.pose.covariance[0] << " "
+                         << odom.pose.covariance[7] << " "
+                         << odom.pose.covariance[14] << " "
+                         << odom.pose.covariance[21] << " "
+                         << odom.pose.covariance[28] << " "
+                         << odom.pose.covariance[35] << " "
+                         << odom.twist.covariance[0] << " "
+                         << odom.twist.covariance[7] << " "
+                         << odom.twist.covariance[14] << " "
+                         << odom.twist.covariance[21] << " "
+                         << odom.twist.covariance[28] << " "
+                         << odom.twist.covariance[35] <<
+                                                         "\n";
+                //<< roll << "," << pitch << "," << yaw << "\n";
             }
         }
         else{

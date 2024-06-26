@@ -252,7 +252,7 @@ void   Data_store::saveResult()
     savePath2Txt(file_loc_path_cal_wrt, path_slam_aligned);
     savePath2Txt(file_loc_path_full_wrt, path_slam_full);
     savePath2Txt(file_loc_path_grt_wrt, path_grt);
-    //savePath2TxtTum(file_loc_path_full_wrt, slam_tf_msg_vector);
+    //savePath2TxtTum(file_loc_path_full_wrt, slam_odom_vector);
 
     if(mode == 2){
 //        std:: cout << file_loc_rawPcl << std::endl;
@@ -292,26 +292,26 @@ bool saveOnePoseAndPath(geometry_msgs::PoseStamped & pose_msg, PointMatrix & pos
 void findGrtAndSlamPoseCorrespondenceByTimeStamp(geometry_msgs::PoseStamped & grt_pose_msg){
 
     double time_slam, time_grt;
-    if(g_data.grt_msg_vector.size() < 2){
+    if(g_data.grt_pose_vector.size() < 2){
         return;
     }
     //for this slam pose
-    time_slam = g_data.tf_slam_buff.header.stamp.toSec();
+    time_slam = g_data.slam_odom_buff.header.stamp.toSec();
     //find a grt pose with the closest time
-    time_grt = g_data.grt_msg_vector[g_data.grt_pointer].header.stamp.toSec();
+    time_grt = g_data.grt_pose_vector[g_data.grt_pointer].header.stamp.toSec();
     //std::cout<<"time_slam:"<<time_slam<<std::endl;
     //std::cout<<"time_grt:"<<time_grt<<' ';
-    //std::cout<<"num grt:"<<g_data.grt_msg_vector.size()<<std::endl;
+    //std::cout<<"num grt:"<<g_data.grt_pose_vector.size()<<std::endl;
 
     //move the pointer, grt is older than the slam pose
-    while(time_grt < time_slam && g_data.grt_pointer + 1 < g_data.grt_msg_vector.size()){
+    while(time_grt < time_slam && g_data.grt_pointer + 1 < g_data.grt_pose_vector.size()){
         g_data.grt_pointer ++;
-        time_grt = g_data.grt_msg_vector[g_data.grt_pointer].header.stamp.toSec();
+        time_grt = g_data.grt_pose_vector[g_data.grt_pointer].header.stamp.toSec();
         //std::cout<<time_grt<<' ';
     }
-    if(g_data.grt_pointer + 1 < g_data.grt_msg_vector.size()){
+    if(g_data.grt_pointer + 1 < g_data.grt_pose_vector.size()){
         //if found the older grt, then find the newer grt
-        double a_step_forward_time_grt = g_data.grt_msg_vector[g_data.grt_pointer + 1].header.stamp.toSec();
+        double a_step_forward_time_grt = g_data.grt_pose_vector[g_data.grt_pointer + 1].header.stamp.toSec();
         //chose the closer one
         if(abs(a_step_forward_time_grt - time_slam) < abs(time_grt - time_slam)){
             g_data.grt_pointer ++;
@@ -323,15 +323,15 @@ void findGrtAndSlamPoseCorrespondenceByTimeStamp(geometry_msgs::PoseStamped & gr
     if(std::abs(time_slam - time_grt) > param.timestamp_valid_thr){
         std::cout << "no grt timestamp close to this frame pose: " << std::abs(time_slam - time_grt) << std::endl;
         //only save path
-        nav_msgs::Odometry & tf_slam_msg = g_data.tf_slam_buff;
+        nav_msgs::Odometry & tf_slam_msg = g_data.slam_odom_buff;
         geometry_msgs::PoseStamped pose_stamped_msg;
         pose_stamped_msg.pose   = tf_slam_msg.pose.pose;
         pose_stamped_msg.header = tf_slam_msg.header;
         g_data.path_slam_full.poses.push_back(pose_stamped_msg);
         return;
     }
-    grt_pose_msg = g_data.grt_msg_vector[g_data.grt_pointer];
-    geometry_msgs::PoseStamped & last_tf_msg = g_data.grt_msg_vector[g_data.grt_pointer - 1];
+    grt_pose_msg = g_data.grt_pose_vector[g_data.grt_pointer];
+    geometry_msgs::PoseStamped & last_tf_msg = g_data.grt_pose_vector[g_data.grt_pointer - 1];
     /*if(grt_pose_msg.pose.position.z - last_tf_msg.pose.position.z > 10 ||
        grt_pose_msg.pose.position.z < -20){
         //grt_pose_msg.pose.pose.position.z = last_tf_msg.pose.pose.position.z;
@@ -342,17 +342,17 @@ void updateTransformation(geometry_msgs::PoseStamped & grt_pose_msg){
 
     if(g_data.step == 0){
         g_data.T_world_grt0 = PoseStamp2transf(grt_pose_msg);
-        g_data.T_lidar0 = Odometry2transf(g_data.tf_slam_buff);
+        g_data.T_lidar0 = Odometry2transf(g_data.slam_odom_buff);
     }
     g_data.T_world_grt1 = PoseStamp2transf(grt_pose_msg);
-    g_data.T_lidar0_lidar1 = g_data.T_lidar0.inverse() * Odometry2transf(g_data.tf_slam_buff);
+    g_data.T_lidar0_lidar1 = g_data.T_lidar0.inverse() * Odometry2transf(g_data.slam_odom_buff);
 
     //push grt pose and path
     saveOnePoseAndPath(grt_pose_msg, g_data.pose_grt, g_data.path_grt);
     //push tf slam
     geometry_msgs::PoseStamped pose_stamped_msg;
-    pose_stamped_msg.pose   =  g_data.tf_slam_buff.pose.pose;
-    pose_stamped_msg.header =  g_data.tf_slam_buff.header;
+    pose_stamped_msg.pose   =  g_data.slam_odom_buff.pose.pose;
+    pose_stamped_msg.header =  g_data.slam_odom_buff.header;
     saveOnePoseAndPath(pose_stamped_msg, g_data.position_slam, g_data.path_slam);
     g_data.path_slam_full.poses.push_back(pose_stamped_msg);
 
@@ -404,8 +404,8 @@ void groundTruthCallback(const geometry_msgs::PoseStamped::ConstPtr & ground_tru
     //used in optitrack system
     ROS_DEBUG("GroundTruth seq: [%d]", ground_truth_msg->header.seq);
     //save grt path
-    g_data.grt_msg_vector.push_back(*ground_truth_msg);
-    //std::cout<<"size of buff"<<g_data.grt_msg_vector.size()<<std::endl;
+    g_data.grt_pose_vector.push_back(*ground_truth_msg);
+    //std::cout<<"size of buff"<<g_data.grt_pose_vector.size()<<std::endl;
     static bool first = true;
     if(first){
         g_data.path_grt.header.frame_id  = ground_truth_msg->header.frame_id;
@@ -418,11 +418,12 @@ void groundTruthUavCallback(const nav_msgs::Odometry::ConstPtr & odom_msg)
     //used in uav system
     ROS_DEBUG("GroundTruthUAV time: [%f]", odom_msg->header.stamp.toSec());
     //convert to PoseStamped
+    g_data.grt_odom_vector.push_back(*odom_msg);
     geometry_msgs::PoseStamped pose_tmp;
     pose_tmp.header = odom_msg->header;
     pose_tmp.pose = odom_msg->pose.pose;
-    g_data.grt_msg_vector.push_back(pose_tmp);
-    //std::cout<<"size of buff"<<g_data.grt_msg_vector.size()<<std::endl;
+    g_data.grt_pose_vector.push_back(pose_tmp);
+    //std::cout<<"size of buff"<<g_data.grt_pose_vector.size()<<std::endl;
     static bool first = true;
     if(first){
         g_data.path_grt.header.frame_id  = odom_msg->header.frame_id;
@@ -435,8 +436,8 @@ void transSlamCallback(const nav_msgs::Odometry::ConstPtr & odom_msg)
     //receive tf
     ROS_DEBUG("transSlamCallback time: [%f]", odom_msg->header.stamp.toSec());
     //save tf slam path
-    g_data.tf_slam_buff = *odom_msg;
-    g_data.slam_tf_msg_vector.push_back(*odom_msg);
+    g_data.slam_odom_buff = *odom_msg;
+    g_data.slam_odom_vector.push_back(*odom_msg);
     if(g_data.mode  == 0){
         computeOnlineError();
         g_data.path_grt_aligned.header.frame_id =  odom_msg->header.frame_id;
@@ -463,9 +464,9 @@ void readGrtFromTxt(){
     }
     geometry_msgs::PoseStamped tmp_pose_msg;
     while(txt2PoseMsg(file_grtpath_read, tmp_pose_msg)){
-        g_data.grt_msg_vector.push_back(tmp_pose_msg);
+        g_data.grt_pose_vector.push_back(tmp_pose_msg);
     }
-    std::cout<< "number pose read: " << g_data.grt_msg_vector.size() <<std::endl;
+    std::cout << "number pose read: " << g_data.grt_pose_vector.size() << std::endl;
 }
 
 int main(int argc, char **argv){
@@ -499,11 +500,11 @@ int main(int argc, char **argv){
             }
             //wait for the first message
             bool first = true;
-            while(nh.ok() && (g_data.grt_msg_vector.empty())){
+            while(nh.ok() && (g_data.grt_pose_vector.empty())){
                 ros::spinOnce();
                 if(first){
                     first = false;
-                    if(g_data.grt_msg_vector.size() < 2){
+                    if(g_data.grt_pose_vector.size() < 2){
                         std::cout<<"waiting for grt"<<std::endl;
                     }
                 }
@@ -526,9 +527,10 @@ int main(int argc, char **argv){
             while(nh.ok()){
                 ros::spinOnce();
                 r.sleep();
-                std::cout << "size of pose: " << g_data.grt_msg_vector.size() << std::endl;
+                std::cout << "size of pose: " << g_data.grt_pose_vector.size() << std::endl;
             }
-            g_data.savePath2TxtTum(g_data.file_loc_path_grt_wrt, g_data.grt_msg_vector);
+            g_data.savePath2TxtTum(g_data.file_loc_path_grt_wrt, g_data.grt_pose_vector);
+            //g_data.saveOdom2Txt(g_data.file_loc_path_grt_wrt, g_data.grt_odom_vector);
         }
 
         else if(g_data.mode == 2){//accumulate registered raw pcl
