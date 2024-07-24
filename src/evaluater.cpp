@@ -12,6 +12,15 @@
 #include "evaluater.h"
 Param param;//initialize ros parameters
 Data_store g_data;//initialize global variables
+std::string getCurrentTimeAsString()
+{
+    std::time_t currentTime = std::time(nullptr);
+    std::tm* currentTm = std::localtime(&currentTime);
+
+    std::ostringstream oss;
+    oss << std::put_time(currentTm, "%Y%m%d%H%M%S"); // 格式化时间为字符串
+    return oss.str();
+}
 
 Transf computeAlignTransformation(PointMatrix & scan_glb, PointMatrix & scan_now){
 
@@ -165,6 +174,15 @@ void Data_store::logInit(const std::string & file_loc){
     std::string file_loc_path_cal  = file_loc + "_path_cal.txt";
     std::string file_loc_path_full = file_loc + "_path_full.txt";
     std::string file_loc_path_grt  = file_loc + "_path_grt.txt";
+
+    //std::string currentTime = getCurrentTimeAsString();
+    //    std::string currentTime = getCurrentTimeAsString();
+//    std::cout << "tend to save report in: " << file_loc << std::endl;
+//    std::string file_loc_report    = file_loc + "_report_"    + currentTime + ".txt";
+//    std::string file_loc_path      = file_loc + "_path_"      + currentTime + ".txt";
+//    std::string file_loc_path_cal  = file_loc + "_path_cal_"  + currentTime + ".txt";
+//    std::string file_loc_path_full = file_loc + "_path_full_" + currentTime + ".txt";
+//    std::string file_loc_path_grt  = file_loc + "_path_grt_"  + currentTime + ".txt";
     file_loc_rawPcl = file_loc + "_raw.pcd";
     //open
     file_loc_report_wrt.open (file_loc_report, std::ios::out);
@@ -431,6 +449,11 @@ void groundTruthUavCallback(const nav_msgs::Odometry::ConstPtr & odom_msg)
         first = false;
     }
 }
+void imuCallback(const sensor_msgs::Imu::ConstPtr & imu_msg)
+{
+    ROS_DEBUG("Imu seq: [%d]", imu_msg->header.seq);
+    g_data.imu_vector.push_back(*imu_msg);
+}
 void transSlamCallback(const nav_msgs::Odometry::ConstPtr & odom_msg)
 {
     //receive tf
@@ -454,6 +477,12 @@ void pclCallback(const sensor_msgs::PointCloud2::ConstPtr & pcl_msg)
 {
     ROS_DEBUG("PointCloud seq: [%d]", pcl_msg->header.seq);
     g_data.registered_pcl_queue.push(*pcl_msg);
+}
+void pressure_Callback(const sensor_msgs::FluidPressure::ConstPtr & pressure_msg)
+{
+    ROS_DEBUG("Barometer seq: [%d]", pressure_msg->header.seq);
+    g_data.pressure_vector.push_back(*pressure_msg);
+
 }
 void readGrtFromTxt(){
 
@@ -481,7 +510,7 @@ int main(int argc, char **argv){
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);//Debug Info
     ros::Rate r(20);//Hz
     nh.param("evaluater/mode", g_data.mode,  0);
-    ros::Subscriber grt_uav_sub, grt_sub, trans_slam_sub;
+    ros::Subscriber grt_uav_sub, grt_sub, trans_slam_sub, barometer_sub, imu_sub;
     g_data.path_pub = nh.advertise<nav_msgs::Path>("/path_grt_aligned", 1);
 
     param.init(nh);
@@ -523,14 +552,21 @@ int main(int argc, char **argv){
 
             //grt_sub = nh.subscribe("/pose", 500, groundTruthCallback);//vicon, msg type: geometry_msgs::PoseStamped
             grt_uav_sub = nh.subscribe("/pose", 500, groundTruthUavCallback);//gps+imu, msg type: nav_msgs::Odometry
+            //imu_sub = nh.subscribe("/imu", 500, imuCallback);
+            //barometer_sub = nh.subscribe("/pressure", 500, pressure_Callback);//bar
             //save path
             while(nh.ok()){
                 ros::spinOnce();
                 r.sleep();
                 std::cout << "size of pose: " << g_data.grt_pose_vector.size() << std::endl;
+                //std::cout << "size of pose: " << g_data.imu_vector.size() << std::endl;
+                //std::cout << "size of pose: " << g_data.pressure_vector.size() << std::endl;
+
             }
-            g_data.savePath2TxtTum(g_data.file_loc_path_grt_wrt, g_data.grt_pose_vector);
-            //g_data.saveOdom2Txt(g_data.file_loc_path_grt_wrt, g_data.grt_odom_vector);
+            g_data.savePath2TxtTum(g_data.file_loc_path_grt_wrt, g_data.grt_pose_vector);//TUM format
+            //g_data.saveOdom2Txt(g_data.file_loc_path_grt_wrt, g_data.grt_odom_vector);//KITTI format
+            //g_data.savePressure2Txt(g_data.file_loc_path_grt_wrt, g_data.pressure_vector);//TUM format
+            //g_data.saveImu2Txt(g_data.file_loc_path_grt_wrt, g_data.imu_vector);//TUM format
         }
 
         else if(g_data.mode == 2){//accumulate registered raw pcl

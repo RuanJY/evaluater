@@ -11,6 +11,8 @@
 #include <queue>
 #include <ctime>
 #include <chrono>
+#include <ctime>
+
 //eigen
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
@@ -29,6 +31,8 @@
 #include "geometry_msgs/PoseStamped.h"
 #include "tf/transform_datatypes.h"
 #include "tf/LinearMath/Matrix3x3.h"
+#include <sensor_msgs/FluidPressure.h>
+
 //pcl
 #include <pcl/filters/voxel_grid.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -58,6 +62,8 @@ public:
     std::vector<nav_msgs::Odometry> slam_odom_vector;
     int grt_pointer = 0;
     std::queue<sensor_msgs::PointCloud2> registered_pcl_queue;
+    std::vector<sensor_msgs::FluidPressure> pressure_vector;
+    std::vector<sensor_msgs::Imu> imu_vector;
 
     Transf T_world_grt0, T_world_grt1, T_lidar0_lidar1, T_grt_lidar, T_lidar0; //1 means final time, 0 means begin time
     nav_msgs::Path path_slam;//xyz and quat, corresponding to path_grt by timestamp
@@ -156,6 +162,53 @@ public:
             std::cout<<"Can not open file: " <<"\n";
         }
         file_out.close();
+    }
+    void savePressure2Txt(std::ofstream & file_out, std::vector<sensor_msgs::FluidPressure> & pressure_msg_vector){
+        if(file_out){
+            for(const auto& one_pressure : pressure_msg_vector){
+                file_out << std::setprecision(16) << one_pressure.header.stamp.toSec() << " "
+                         << one_pressure.fluid_pressure << " "
+                         << one_pressure.variance <<
+                         "\n";
+            }
+        }
+        else{
+            std::cout<<"Can not open file: " <<"\n";
+        }
+        file_out.close();
+    }
+
+    void saveImu2Txt(std::ofstream & file_out, std::vector<sensor_msgs::Imu> & imu_msg_vector){
+        if(file_out){
+            for(const auto& one_imu : imu_msg_vector){
+                file_out << std::setprecision(16) << one_imu.header.stamp.toSec() << " "
+                         << one_imu.orientation.w << " "
+                         << one_imu.orientation.x << " "
+                         << one_imu.orientation.y << " "
+                         << one_imu.orientation.z << " "
+                         << one_imu.angular_velocity.x << " "
+                         << one_imu.angular_velocity.y << " "
+                         << one_imu.angular_velocity.z << " "
+                         << one_imu.linear_acceleration.x << " "
+                         << one_imu.linear_acceleration.y << " "
+                         << one_imu.linear_acceleration.z << " "
+                         << one_imu.orientation_covariance[0] << " "
+                         << one_imu.orientation_covariance[4] << " "
+                         << one_imu.orientation_covariance[8] << " "
+                         << one_imu.angular_velocity_covariance[0] << " "
+                         << one_imu.angular_velocity_covariance[4] << " "
+                         << one_imu.angular_velocity_covariance[8] << " "
+                         << one_imu.linear_acceleration_covariance[0] << " "
+                         << one_imu.linear_acceleration_covariance[4] << " "
+                         << one_imu.linear_acceleration_covariance[8] <<
+                         "\n";
+            }
+        }
+        else{
+            std::cout<<"Can not open file: " <<"\n";
+        }
+        file_out.close();
+
     }
     void saveOdom2Txt(std::ofstream & file_out, const std::vector<nav_msgs::Odometry> & odom_vector){
         //output odom msg
